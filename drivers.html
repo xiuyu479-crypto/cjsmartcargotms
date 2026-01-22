@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>司机档案</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial;margin:0;background:linear-gradient(135deg,#e9f3ff 0%,#dbe9ff 100%);color:#123;padding:0}
+.header{padding:18px;text-align:center;color:#1f4e92;font-weight:600;font-size:20px}
+.container{max-width:980px;margin:18px auto;padding:14px}
+.card{background:rgba(255,255,255,0.75);backdrop-filter:blur(8px);border-radius:12px;padding:14px;box-shadow:0 6px 16px rgba(0,0,0,0.08)}
+.form-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:10px}
+.input{padding:8px;border-radius:8px;border:1px solid #dfe8ff;background:rgba(255,255,255,0.9)}
+.label{font-size:13px;color:#345;margin-bottom:6px}
+.btn{padding:10px 14px;border-radius:10px;border:none;background:#1e63d8;color:#fff;cursor:pointer}
+.secondary{background:#6b7280}
+.table{width:100%;border-collapse:collapse;margin-top:12px}
+.table th{background:rgba(30,99,216,0.07);text-align:left;padding:10px;border-bottom:1px solid rgba(0,0,0,0.06)}
+.table td{Padding:10px;border-bottom:1px solid rgba(0,0,0,0.04)}
+.actions button{margin-right:6px;padding:6px 10px;border-radius:8px;border:none;cursor:pointer}
+.editBtn{background:#f59e0b;color:#fff}
+.delBtn{background:#ef4444;color:#fff}
+.empty{color:#666;padding:12px}
+.langSwitch{position:fixed;top:12px;right:16px}
+.langBtn{padding:6px 12px;border-radius:12px;border:none;background:rgba(255,255,255,0.7);cursor:pointer}
+</style>
+  <link rel="stylesheet" href="./assets/css/style.css">
+  <script type="module" src="./assets/js/firebase.js"></script>
+</head>
+<body>
+<script>
+if(localStorage.getItem("tms_auth") !== "uki1998"){
+  const page = location.pathname.split('/').pop();
+  window.location.href = "password.html?redirect=" + encodeURIComponent(page);
+}
+</script>
+
+
+<div style="position:fixed;top:15px;left:15px;z-index:999;">
+  <button onclick="window.location.href='index.html'">返回主页面</button>
+</div>
+
+<div class="langSwitch"><button class="langBtn" id="langToggle">English</button></div>
+<div class="header" id="title">司机档案</div>
+<div class="container">
+  <div class="card">
+    <div style="font-weight:600;margin-bottom:8px" id="formTitle">添加新司机</div>
+    <div class="form-row">
+      <div>
+        <div class="label" id="lblName">司机姓名</div>
+        <input class="input" id="name">
+      </div>
+      <div>
+        <div class="label" id="lblDob">出生日期</div>
+        <input class="input" id="dob" type="date">
+      </div>
+      <div>
+        <div class="label" id="lblPassport">护照号</div>
+        <input class="input" id="passport">
+      </div>
+      <div>
+        <div class="label" id="lblNation">国籍</div>
+        <input class="input" id="nation">
+      </div>
+      <div>
+        <div class="label" id="lblExp">工作年限</div>
+        <input class="input" id="experience" type="number" min="0">
+      </div>
+      <div>
+        <div class="label" id="lblPhone">联系方式</div>
+        <input class="input" id="phone">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn" id="saveBtn">保存</button>
+      <button class="btn secondary" id="resetBtn">重置</button>
+      <div style="margin-left:auto;color:#666" id="status"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <div style="font-weight:600">司机列表</div>
+    <table class="table" id="driverTable">
+      <thead><tr>
+        <th>姓名</th><th>出生日期</th><th>护照号</th><th>国籍</th><th>年限</th><th>联系方式</th><th>操作</th>
+      </tr></thead>
+      <tbody id="tbody">
+      <tr><td colspan="7" class="empty">正在加载...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+import { getDatabase, ref, push, set, onValue, update, remove } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDEbePpsrXwD8Okqa93UOGUFE37c8SFHS0",
+  authDomain: "cjsmartcargo-datebase.firebaseapp.com",
+  databaseURL: "https://cjsmartcargo-datebase-default-rtdb.firebaseio.com",
+  projectId: "cjsmartcargo-datebase",
+  storageBucket: "cjsmartcargo-datebase.firebasestorage.app",
+  messagingSenderId: "751451468006",
+  appId: "1:751451468006:web:a3cbd33cf3c2b29f624b27"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const PATH = 'tms/drivers';
+
+const nameEl = document.getElementById('name');
+const dobEl = document.getElementById('dob');
+const passportEl = document.getElementById('passport');
+const nationEl = document.getElementById('nation');
+const expEl = document.getElementById('experience');
+const phoneEl = document.getElementById('phone');
+const tbody = document.getElementById('tbody');
+const statusEl = document.getElementById('status');
+const formTitle = document.getElementById('formTitle');
+const saveBtn = document.getElementById('saveBtn');
+const resetBtn = document.getElementById('resetBtn');
+
+let editingId = null;
+
+// listen drivers
+const driversRef = ref(db, PATH);
+onValue(driversRef, snapshot=>{
+  const data = snapshot.val() || {};
+  renderTable(data);
+});
+
+function renderTable(data){
+  tbody.innerHTML = '';
+  const keys = Object.keys(data);
+  if(keys.length===0){
+    tbody.innerHTML = '<tr><td colspan="7" class="empty">暂无司机</td></tr>';
+    return;
+  }
+  keys.forEach(k=>{
+    const d = data[k];
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${escapeHtml(d.name||'')}</td>
+      <td>${escapeHtml(d.dob||'')}</td>
+      <td>${escapeHtml(d.passport||'')}</td>
+      <td>${escapeHtml(d.nation||'')}</td>
+      <td>${escapeHtml(d.experience||'')}</td>
+      <td>${escapeHtml(d.phone||'')}</td>
+      <td class="actions">
+        <button class="editBtn" data-id="${k}">编辑</button>
+        <button class="delBtn" data-id="${k}">删除</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+  // bind buttons
+  tbody.querySelectorAll('.editBtn').forEach(b=>b.addEventListener('click', onEdit));
+  tbody.querySelectorAll('.delBtn').forEach(b=>b.addEventListener('click', onDelete));
+}
+
+function escapeHtml(s){ return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+async function onEdit(e){
+  const id = e.currentTarget.dataset.id;
+  // load single record
+  const snapRef = ref(db, PATH + '/' + id);
+  // simple read via onValue once
+  onValue(snapRef, snap=>{
+    const v = snap.val();
+    if(!v) return;
+    nameEl.value = v.name||'';
+    dobEl.value = v.dob||'';
+    passportEl.value = v.passport||'';
+    nationEl.value = v.nation||'';
+    expEl.value = v.experience||'';
+    phoneEl.value = v.phone||'';
+    editingId = id;
+    formTitle.innerText = '编辑司机';
+    statusEl.innerText = '正在编辑...（记得保存）';
+    // turn off this listener immediately
+    snapRef.off;
+  }, {onlyOnce:true});
+}
+
+async function onDelete(e){
+  const id = e.currentTarget.dataset.id;
+  if(!confirm('确认删除此司机？')) return;
+  try{
+    await remove(ref(db, PATH + '/' + id));
+    statusEl.innerText = '已删除';
+  }catch(err){
+    console.error(err);
+    statusEl.innerText = '删除失败';
+  }
+}
+
+resetBtn.addEventListener('click', ()=>{
+  nameEl.value=''; dobEl.value=''; passportEl.value=''; nationEl.value=''; expEl.value=''; phoneEl.value='';
+  editingId = null; formTitle.innerText='添加新司机'; statusEl.innerText='';
+});
+
+saveBtn.addEventListener('click', async ()=>{
+  const payload = {
+    name: nameEl.value.trim(),
+    dob: dobEl.value,
+    passport: passportEl.value.trim(),
+    nation: nationEl.value.trim(),
+    experience: expEl.value ? parseFloat(expEl.value) : 0,
+    phone: phoneEl.value.trim(),
+    createdAt: Date.now()
+  };
+  if(!payload.name){ alert('请输入姓名'); return; }
+  try{
+    if(editingId){
+      await set(ref(db, PATH + '/' + editingId), payload);
+      statusEl.innerText = '已更新';
+    } else {
+      const p = push(ref(db, PATH));
+      await set(p, payload);
+      statusEl.innerText = '已添加';
+    }
+    // reset
+    resetBtn.click();
+  }catch(err){
+    console.error(err);
+    statusEl.innerText = '保存失败';
+  }
+});
+
+// language handling (read ?lang=)
+const urlParams = new URLSearchParams(window.location.search);
+let lang = urlParams.get('lang') || localStorage.getItem('tms_lang') || 'zh';
+const langPack = {
+  zh:{title:'司机档案', formTitleAdd:'添加新司机', lblName:'司机姓名', lblDob:'出生日期', lblPassport:'护照号', lblNation:'国籍', lblExp:'工作年限', lblPhone:'联系方式', save:'保存', reset:'重置', noData:'暂无司机'},
+  en:{title:'Driver Archive', formTitleAdd:'Add New Driver', lblName:'Name', lblDob:'Birth Date', lblPassport:'Passport No', lblNation:'Nationality', lblExp:'Experience (yrs)', lblPhone:'Contact', save:'Save', reset:'Reset', noData:'No drivers'}
+};
+function applyLang(){
+  const t = langPack[lang] || langPack.zh;
+  document.getElementById('title').innerText = t.title;
+  formTitle.innerText = editingId ? '编辑司机' : t.formTitleAdd;
+  document.getElementById('lblName').innerText = t.lblName;
+  document.getElementById('lblDob').innerText = t.lblDob;
+  document.getElementById('lblPassport').innerText = t.lblPassport;
+  document.getElementById('lblNation').innerText = t.lblNation;
+  document.getElementById('lblExp').innerText = t.lblExp;
+  document.getElementById('lblPhone').innerText = t.lblPhone;
+  saveBtn.innerText = t.save;
+  resetBtn.innerText = t.reset;
+  // update table empty text if applicable
+  const emptyRow = tbody.querySelector('.empty');
+  if(emptyRow) emptyRow.innerText = t.noData;
+  document.getElementById('langToggle').innerText = lang === 'zh' ? 'English' : '中文';
+  localStorage.setItem('tms_lang', lang);
+}
+document.getElementById('langToggle').addEventListener('click', ()=>{
+  lang = lang === 'zh' ? 'en' : 'zh'; applyLang();
+});
+applyLang();
+</script>
+</body>
+</html>
