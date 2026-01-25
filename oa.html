@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OA 流程审批 - TMS</title>
+    <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --primary: #1e63d8;
+            --success: #27ae60;
+            --danger: #e74c3c;
+            --warning: #f39c12;
+            --bg-gradient: linear-gradient(135deg, #e9f3ff 0%, #dbe9ff 100%);
+            --glass: rgba(255, 255, 255, 0.85);
+            --shadow: 0 8px 32px rgba(31, 38, 135, 0.1);
+        }
+
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg-gradient); min-height: 100vh; color: #333; }
+
+        /* 导航栏 */
+        .navbar { padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.9); backdrop-filter: blur(10px); position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        .nav-title { color: var(--primary); font-weight: 800; font-size: 20px; display: flex; align-items: center; gap: 10px; cursor: pointer; }
+        .role-badge { font-size: 12px; padding: 4px 8px; border-radius: 12px; background: #e0eaff; color: var(--primary); font-weight: 600; text-transform: uppercase; }
+
+        /* 标签页切换 */
+        .tabs { display: flex; overflow-x: auto; background: white; padding: 10px 20px; gap: 10px; border-bottom: 1px solid #eee; -webkit-overflow-scrolling: touch; }
+        .tab-btn { padding: 10px 16px; border: none; background: #f5f7fa; border-radius: 8px; color: #666; font-weight: 600; white-space: nowrap; cursor: pointer; transition: all 0.2s; }
+        .tab-btn.active { background: var(--primary); color: white; box-shadow: 0 4px 10px rgba(30,99,216,0.3); }
+
+        /* 内容区 */
+        .container { max-width: 1000px; margin: 20px auto; padding: 0 15px; padding-bottom: 80px; }
+        
+        /* 列表卡片 */
+        .request-card { background: var(--glass); border-radius: 16px; padding: 20px; margin-bottom: 15px; box-shadow: var(--shadow); border: 1px solid rgba(255,255,255,0.5); position: relative; transition: transform 0.2s; }
+        .request-card:hover { transform: translateY(-2px); }
+        
+        .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+        .applicant-name { font-weight: bold; font-size: 16px; color: #2c3e50; }
+        .apply-date { font-size: 12px; color: #999; }
+        
+        .card-body { font-size: 14px; color: #555; line-height: 1.6; }
+        .info-row { display: flex; gap: 15px; margin-bottom: 5px; }
+        .label { color: #888; width: 70px; flex-shrink: 0; }
+        
+        .status-tag { position: absolute; top: 20px; right: 20px; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: bold; }
+        .st-pending { background: #e3f2fd; color: var(--primary); }
+        .st-approved { background: #e8f5e9; color: var(--success); }
+        .st-rejected { background: #ffebee; color: var(--danger); }
+
+        /* 操作按钮区 */
+        .action-area { margin-top: 15px; padding-top: 15px; border-top: 1px dashed #eee; display: flex; gap: 10px; justify-content: flex-end; }
+        .btn { padding: 8px 16px; border-radius: 8px; border: none; font-weight: 600; cursor: pointer; font-size: 13px; }
+        .btn-approve { background: var(--success); color: white; }
+        .btn-reject { background: #fff; border: 1px solid var(--danger); color: var(--danger); }
+        .btn-main { background: var(--primary); color: white; box-shadow: 0 4px 12px rgba(30,99,216,0.3); }
+
+        /* 悬浮新增按钮 */
+        .fab-add { position: fixed; bottom: 30px; right: 30px; width: 60px; height: 60px; border-radius: 50%; background: var(--primary); color: white; font-size: 30px; border: none; box-shadow: 0 8px 20px rgba(30,99,216,0.4); cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 90; transition: transform 0.2s; }
+        .fab-add:active { transform: scale(0.9); }
+        .fab-export { bottom: 100px; background: #217346; } /* Excel Green */
+
+        /* 模态框 */
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(3px); }
+        .modal-content { background: white; width: 90%; max-width: 500px; border-radius: 20px; padding: 25px; animation: slideUp 0.3s ease; }
+        @keyframes slideUp { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 13px; color: #666; }
+        .form-control { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 15px; }
+        select.form-control { background: white; }
+
+        .empty-state { text-align: center; padding: 40px; color: #999; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar">
+    <div class="nav-title" onclick="location.href='index.html'">
+        <span>🔙 OA 协同办公</span>
+    </div>
+    <div>
+        <span class="role-badge" id="currentRoleBadge">Loading...</span>
+    </div>
+</nav>
+
+<div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('driverExp')">司机费用 (Driver)</button>
+    <button class="tab-btn" onclick="switchTab('publicExp')">公共费用 (Office)</button>
+    <button class="tab-btn" onclick="switchTab('vehicleUse')">车辆使用 (Vehicle)</button>
+    <button class="tab-btn" onclick="switchTab('leave')">请假申请 (Leave)</button>
+    <button class="tab-btn" onclick="switchTab('outing')">外出申请 (Outing)</button>
+</div>
+
+<div class="container" id="listContainer">
+    <div class="empty-state">加载中...</div>
+</div>
+
+<button class="fab-add" id="btnAdd" onclick="openModal()" style="display:none;">+</button>
+<button class="fab-add fab-export" id="btnExport" onclick="exportExcel()" style="display:none;">📥</button>
+
+<div class="modal" id="appModal">
+    <div class="modal-content">
+        <h2 id="modalTitle" style="margin-top:0; color:var(--primary);">新建申请</h2>
+        <form id="appForm">
+            <div id="dynamicFields"></div>
+            
+            <div style="display:flex; gap:10px; margin-top:20px;">
+                <button type="button" class="btn btn-reject" style="flex:1" onclick="closeModal()">取消</button>
+                <button type="submit" class="btn btn-main" style="flex:1">提交申请</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+    import { getDatabase, ref, push, set, onValue, update } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+
+    // 1. Firebase 配置 (与 clients.html 保持一致)
+    const firebaseConfig = {
+        apiKey: "AIzaSyDEbePpsrXwD8Okqa93UOGUFE37c8SFHS0",
+        authDomain: "cjsmartcargo-datebase.firebaseapp.com",
+        databaseURL: "https://cjsmartcargo-datebase-default-rtdb.firebaseio.com",
+        projectId: "cjsmartcargo-datebase",
+        storageBucket: "cjsmartcargo-datebase.firebasestorage.app",
+        messagingSenderId: "751451468006",
+        appId: "1:751451468006:web:a3cbd33cf3c2b29f624b27"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // 2. 权限与角色检查
+    const authToken = localStorage.getItem("tms_auth");
+    const userRole = localStorage.getItem("tms_role") || 'viewer';
+    
+    // 如果未登录，回退到登录页
+    if(!authToken) {
+        window.location.href = "password.html?redirect=oa.html";
+    }
+
+    document.getElementById('currentRoleBadge').innerText = userRole.toUpperCase();
+
+    // 3. 全局状态
+    let currentTab = 'driverExp';
+    let currentDataList = [];
+
+    // 车辆列表常量
+    const VEHICLES = ["BAK8067ZM", "BAL9570ZM", "BAR6536ZM", "BBC296ZM", "BAR9208ZM"];
+
+    // 4. 模块定义 (配置各个模块的行为、字段和权限)
+    const MODULES = {
+        driverExp: {
+            title: "司机费用审批",
+            path: "tms/oa/driver_expenses",
+            // 谁可以审批? (Staff 对于司机费用是审批者，Admin 也可以)
+            approver: ['staff', 'admin'], 
+            // 谁可以新建? (正常是司机在Report端提交，这里为了测试，暂时不开启Staff新建)
+            canCreate: false, 
+            render: (data) => `
+                <div class="info-row"><span class="label">司机:</span> <b>${data.driverName}</b></div>
+                <div class="info-row"><span class="label">金额:</span> <span style="color:#e67e22;font-weight:bold">${data.amount} ZMW</span></div>
+                <div class="info-row"><span class="label">类型:</span> ${data.type}</div>
+                <div class="info-row"><span class="label">备注:</span> ${data.remark || '-'}</div>
+            `
+        },
+        publicExp: {
+            title: "公共/办公室费用",
+            path: "tms/oa/public_expenses",
+            approver: ['admin'],
+            canCreate: true,
+            fields: [
+                {id: 'applicant', label: '申请人', type: 'text', req: true},
+                {id: 'category', label: '费用类别', type: 'text', req: true, placeholder: '如: 办公用品采购'},
+                {id: 'currency', label: '货币类型', type: 'select', opts: ['ZMW', 'USD']},
+                {id: 'amount', label: '金额', type: 'number', req: true},
+                {id: 'date', label: '记录日期', type: 'date', req: true}
+            ],
+            render: (data) => `
+                <div class="info-row"><span class="label">类别:</span> <b>${data.category}</b></div>
+                <div class="info-row"><span class="label">金额:</span> <b>${data.amount} ${data.currency}</b></div>
+                <div class="info-row"><span class="label">申请人:</span> ${data.applicant}</div>
+            `
+        },
+        vehicleUse: {
+            title: "车辆使用申请",
+            path: "tms/oa/vehicle_requests",
+            approver: ['admin'],
+            canCreate: true,
+            fields: [
+                {id: 'applicant', label: '申请人', type: 'text', req: true},
+                {id: 'vehicle', label: '选择车辆', type: 'select', opts: VEHICLES},
+                {id: 'reason', label: '使用理由', type: 'text', req: true},
+                {id: 'startDate', label: '开始日期', type: 'datetime-local', req: true},
+                {id: 'endDate', label: '结束日期', type: 'datetime-local', req: true}
+            ],
+            render: (data) => `
+                <div class="info-row"><span class="label">车辆:</span> <b style="color:var(--primary)">${data.vehicle}</b></div>
+                <div class="info-row"><span class="label">理由:</span> ${data.reason}</div>
+                <div class="info-row"><span class="label">时间:</span> ${formatDate(data.startDate)} 至 ${formatDate(data.endDate)}</div>
+            `
+        },
+        leave: {
+            title: "请假申请",
+            path: "tms/oa/leave_requests",
+            approver: ['admin'],
+            canCreate: true,
+            fields: [
+                {id: 'applicant', label: '请假人姓名', type: 'text', req: true},
+                {id: 'dept', label: '部门', type: 'text', req: true},
+                {id: 'startDate', label: '开始日期', type: 'date', req: true},
+                {id: 'days', label: '请假天数', type: 'number', req: true},
+                {id: 'reason', label: '请假理由', type: 'text', req: true}
+            ],
+            render: (data) => `
+                <div class="info-row"><span class="label">部门:</span> ${data.dept}</div>
+                <div class="info-row"><span class="label">天数:</span> <b>${data.days} 天</b></div>
+                <div class="info-row"><span class="label">时间:</span> ${data.startDate} 开始</div>
+                <div class="info-row"><span class="label">理由:</span> ${data.reason}</div>
+            `
+        },
+        outing: {
+            title: "外出申请",
+            path: "tms/oa/outing_requests",
+            approver: ['admin'],
+            canCreate: true,
+            fields: [
+                {id: 'applicant', label: '申请人', type: 'text', req: true},
+                {id: 'purpose', label: '外出目的', type: 'text', req: true},
+                {id: 'startDate', label: '外出时间', type: 'datetime-local', req: true}
+            ],
+            render: (data) => `
+                <div class="info-row"><span class="label">目的:</span> <b>${data.purpose}</b></div>
+                <div class="info-row"><span class="label">时间:</span> ${formatDate(data.startDate)}</div>
+            `
+        }
+    };
+
+    // 5. 核心逻辑函数
+
+    // 切换 Tab
+    window.switchTab = (tabKey) => {
+        currentTab = tabKey;
+        // 更新 UI 高亮
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelector(`button[onclick="switchTab('${tabKey}')"]`).classList.add('active');
+        
+        // 控制新增按钮显示 (如果是 Staff 且该模块允许新建)
+        const config = MODULES[tabKey];
+        const showAdd = (userRole === 'staff' && config.canCreate) || (userRole === 'admin' && config.canCreate); 
+        // Admin 一般也可以新建，虽然需求侧重 Staff 申请，但为了方便 Admin 自测或代填，这里允许 Admin 新建
+        document.getElementById('btnAdd').style.display = showAdd ? 'flex' : 'none';
+
+        // 控制导出按钮 (仅 Admin 在请假页面)
+        document.getElementById('btnExport').style.display = (userRole === 'admin' && tabKey === 'leave') ? 'flex' : 'none';
+
+        loadData();
+    };
+
+    // 加载数据
+    function loadData() {
+        const config = MODULES[currentTab];
+        const listContainer = document.getElementById('listContainer');
+        listContainer.innerHTML = '<div class="empty-state">加载中...</div>';
+
+        onValue(ref(db, config.path), (snapshot) => {
+            const data = snapshot.val();
+            currentDataList = []; // 重置当前数据供导出使用
+            listContainer.innerHTML = '';
+
+            if (!data) {
+                listContainer.innerHTML = '<div class="empty-state">暂无申请记录</div>';
+                // 仅用于测试：如果司机费用为空，自动插入一条模拟数据，方便演示
+                if(currentTab === 'driverExp' && userRole === 'staff') {
+                     // createMockDriverExp(); // 取消注释可开启自动模拟
+                }
+                return;
+            }
+
+            // 转换对象为数组并倒序 (最新的在上面)
+            const arr = Object.keys(data).map(key => ({ id: key, ...data[key] })).reverse();
+            currentDataList = arr;
+
+            arr.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'request-card';
+                
+                // 状态样式
+                let statusClass = 'st-pending';
+                let statusText = '待审批 (Pending)';
+                if (item.status === 'approved') { statusClass = 'st-approved'; statusText = '审批通过 (Approved)'; }
+                if (item.status === 'rejected') { statusClass = 'st-rejected'; statusText = '已拒绝 (Rejected)'; }
+
+                // 是否显示操作按钮
+                const canApprove = config.approver.includes(userRole) && item.status === 'pending';
+                
+                let btnsHtml = '';
+                if (canApprove) {
+                    btnsHtml = `
+                        <div class="action-area">
+                            <button class="btn btn-reject" onclick="window.handleAction('${item.id}', 'rejected')">拒绝 (Reject)</button>
+                            <button class="btn btn-approve" onclick="window.handleAction('${item.id}', 'approved')">批准 (Approve)</button>
+                        </div>
+                    `;
+                }
+
+                card.innerHTML = `
+                    <span class="status-tag ${statusClass}">${statusText}</span>
+                    <div class="card-header">
+                        <div>
+                            <div class="applicant-name">${item.applicant || item.driverName || '未知用户'}</div>
+                            <div class="apply-date">${new Date(item.timestamp).toLocaleString()}</div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        ${config.render(item)}
+                    </div>
+                    ${btnsHtml}
+                `;
+                listContainer.appendChild(card);
+            });
+        });
+    }
+
+    // 审批/拒绝操作
+    window.handleAction = (id, newStatus) => {
+        if(!confirm(`确定要将此申请标记为 ${newStatus === 'approved' ? '通过' : '拒绝'} 吗?`)) return;
+        const path = `${MODULES[currentTab].path}/${id}`;
+        update(ref(db, path), {
+            status: newStatus,
+            approver: userRole,
+            approveTime: Date.now()
+        }).then(() => {
+            // alert("操作成功"); 自动刷新，不需要 alert
+        }).catch(e => alert("错误: " + e.message));
+    };
+
+    // 打开新建模态框
+    window.openModal = () => {
+        const config = MODULES[currentTab];
+        if(!config.fields) return;
+
+        document.getElementById('modalTitle').innerText = "新建: " + config.title;
+        const container = document.getElementById('dynamicFields');
+        container.innerHTML = '';
+
+        config.fields.forEach(f => {
+            let html = `<div class="form-group"><label>${f.label}</label>`;
+            if(f.type === 'select') {
+                html += `<select id="f_${f.id}" class="form-control">`;
+                f.opts.forEach(o => html += `<option value="${o}">${o}</option>`);
+                html += `</select>`;
+            } else {
+                html += `<input type="${f.type}" id="f_${f.id}" class="form-control" ${f.placeholder ? `placeholder="${f.placeholder}"` : ''} ${f.req ? 'required' : ''}>`;
+            }
+            html += `</div>`;
+            container.innerHTML += html;
+        });
+
+        document.getElementById('appModal').style.display = 'flex';
+    };
+
+    window.closeModal = () => {
+        document.getElementById('appModal').style.display = 'none';
+        document.getElementById('appForm').reset();
+    };
+
+    // 提交表单
+    document.getElementById('appForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const config = MODULES[currentTab];
+        const payload = {
+            status: 'pending',
+            timestamp: Date.now(),
+            createdStr: new Date().toLocaleString()
+        };
+
+        // 收集字段数据
+        config.fields.forEach(f => {
+            payload[f.id] = document.getElementById(`f_${f.id}`).value;
+        });
+
+        push(ref(db, config.path), payload)
+            .then(() => {
+                closeModal();
+            })
+            .catch(err => alert("提交失败: " + err.message));
+    });
+
+    // 导出 Excel (仅请假模块)
+    window.exportExcel = () => {
+        if(currentTab !== 'leave' || currentDataList.length === 0) {
+            alert("当前没有数据可导出");
+            return;
+        }
+
+        // 格式化数据以供导出
+        const exportData = currentDataList.map(item => ({
+            "申请人": item.applicant,
+            "部门": item.dept,
+            "开始日期": item.startDate,
+            "天数": item.days,
+            "理由": item.reason,
+            "申请时间": item.createdStr,
+            "当前状态": item.status === 'approved' ? '已通过' : (item.status === 'rejected' ? '已拒绝' : '待审批')
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "请假记录");
+        XLSX.writeFile(wb, `请假统计表_${new Date().toISOString().slice(0,10)}.xlsx`);
+    };
+
+    // 辅助: 格式化日期显示
+    function formatDate(str) {
+        if(!str) return '-';
+        return str.replace('T', ' ');
+    }
+
+    // 仅供演示：模拟创建一条司机费用请求 (因为 report.html 目前还没对接费用发送)
+    function createMockDriverExp() {
+        push(ref(db, MODULES.driverExp.path), {
+            driverName: "TEST DRIVER",
+            amount: 500,
+            type: "燃油费",
+            remark: "路途加油",
+            status: "pending",
+            timestamp: Date.now()
+        });
+    }
+
+    // 初始化
+    window.onload = () => switchTab('driverExp');
+    
+    // 点击模态框背景关闭
+    window.onclick = function(event) {
+        const modal = document.getElementById('appModal');
+        if (event.target == modal) {
+            closeModal();
+        }
+    }
+</script>
+
+</body>
+</html>

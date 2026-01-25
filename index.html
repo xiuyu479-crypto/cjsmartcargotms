@@ -34,7 +34,7 @@ body {
 
 /* Logout Button */
 .logoutBtn {
-    position:absolute; 
+    position:absolute;
     top:14px; 
     left:18px;
     padding:6px 12px;
@@ -56,7 +56,7 @@ body {
     letter-spacing:1px;
 }
 
-/* Grid Container - 3x4 Layout */
+/* Grid Container */
 .container {
     max-width:1000px;
     margin:0 auto;
@@ -108,11 +108,18 @@ body {
 
 <body>
 
-<button class="logoutBtn" onclick="localStorage.removeItem('tms_auth'); window.location.href='password.html';">Logout / Exit</button>
+<button class="logoutBtn" onclick="localStorage.removeItem('tms_auth'); localStorage.removeItem('tms_role'); window.location.href='password.html';">Logout / Exit</button>
 
 <script>
-// 权限检查：未登录则重定向至登录页
-if(localStorage.getItem("tms_auth") !== "uki1998"){
+/**
+ * 逻辑检查点 1：防止重复验证
+ * 只要 localStorage 里有有效的 tms_auth，就不跳转到登录页
+ */
+const authToken = localStorage.getItem("tms_auth");
+const userRole = localStorage.getItem("tms_role");
+
+if(!authToken) {
+    // 只有没登录时才去 password.html
     const page = location.pathname.split('/').pop() || "index.html";
     window.location.href = "password.html?redirect=" + encodeURIComponent(page);
 }
@@ -141,9 +148,9 @@ if(localStorage.getItem("tms_auth") !== "uki1998"){
         <img src="https://img.icons8.com/ios-filled/50/1e63d8/car.png">
         车辆档案
     </div>
-    <div class="card" onclick="go('drivers.html')" id="btn4">
+    <div class="card" onclick="go('oa.html')" id="btn4">
         <img src="https://img.icons8.com/ios-filled/50/1e63d8/driver.png">
-        司机档案
+        流程申请
     </div>
     <div class="card" onclick="go('completed.html')" id="btn5">
         <img src="https://img.icons8.com/ios-filled/50/1e63d8/document.png">
@@ -165,7 +172,7 @@ if(localStorage.getItem("tms_auth") !== "uki1998"){
         <img src="https://img.icons8.com/ios-filled/50/1e63d8/bill.png">
         客户账单
     </div>
-    <div class="card" onclick="go('gps.html')" id="btn10">
+    <div class="card" onclick="go('attendance.html')" id="btn10">
         <img src="https://img.icons8.com/ios-filled/50/1e63d8/map.png">
         GPS 车辆追踪
     </div>
@@ -178,7 +185,38 @@ if(localStorage.getItem("tms_auth") !== "uki1998"){
 <script>
 let currentLang = localStorage.getItem('tms_lang') || "zh";
 
-function go(url){ 
+/**
+ * 逻辑检查点 2：跳转拦截
+ * 这里的逻辑是：点击图标 -> 检查角色 -> 允许则跳转，不允许则弹窗。
+ * 绝对不会在这里要求输入密码，因为 userRole 已经在登录时存好了。
+ */
+function go(url){
+    const role = localStorage.getItem("tms_role");
+
+    // 管理员 (admin) 拥有所有权限，直接过
+    if (role === 'admin') {
+        window.location.href = url + '?lang=' + currentLang;
+        return;
+    }
+
+    // 员工 (staff) 权限拦截：不能进 费用统计 和 客户账单
+    if (role === 'staff') {
+        if (url === 'fleetcost.html' || url === 'billing.html') {
+            alert(currentLang === "zh" ? "权限不足：该模块仅限管理员。" : "Access Denied: Admin only.");
+            return;
+        }
+    }
+
+    // 访客 (viewer) 权限拦截：不能进 新建订单、费用统计、客户账单、客户信息
+    if (role === 'viewer') {
+        const restricted = ['neworders.html', 'fleetcost.html', 'billing.html', 'clients.html'];
+        if (restricted.includes(url)) {
+            alert(currentLang === "zh" ? "权限不足：访客无法访问此功能。" : "Access Denied: Restricted for viewers.");
+            return;
+        }
+    }
+
+    // 默认跳转
     window.location.href = url + '?lang=' + currentLang; 
 }
 
@@ -190,13 +228,13 @@ const langPack = {
         btn1:"派车单制作",
         btn2:"动态监控",
         btn3:"车辆档案",
-        btn4:"司机档案",
+        btn4:"OA流程申请",
         btn5:"已完成订单记录",
         btn6:"车辆维护",
         btn7:"客户追踪",
         btn8:"车队费用统计",
         btn9:"客户账单",
-        btn10:"GPS 车辆追踪",
+        btn10:"考勤报告",
         btnClients: "客户信息"
     },
     en:{
@@ -206,13 +244,13 @@ const langPack = {
         btn1:"Dispatch Order",
         btn2:"Dynamic Monitoring",
         btn3:"Vehicle Archive",
-        btn4:"Driver Archive",
+        btn4:"Application Process",
         btn5:"Completed Orders",
         btn6:"Maintenance",
         btn7:"Clients tracking",
         btn8:"Fleet Cost",
         btn9:"Client Billing",
-        btn10:"GPS Tracking",
+        btn10:"Attendance",
         btnClients: "Clients Info"
     }
 };
@@ -251,6 +289,5 @@ function updateCard(id, text, iconName){
 
 window.onload = applyLang;
 </script>
-
 </body>
 </html>

@@ -137,42 +137,62 @@
         }
         .slider-handle::after { content: '➔'; color: var(--success); font-size: 24px; font-weight: bold; }
 
-        /* Issue Assistance Button */
-        .issue-btn {
-            margin-top: 20px;
+        /* Buttons: Issue & Expense */
+        .btn-block {
+            margin-top: 15px;
             width: 100%;
             padding: 15px;
-            background: #fff;
-            color: var(--danger);
-            border: 2px solid var(--danger);
             border-radius: 12px;
             font-size: 16px;
             font-weight: 800;
             cursor: pointer;
             transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
         }
-        .issue-btn:active {
-            background: var(--danger);
-            color: #fff;
+        .issue-btn {
+            background: #fff;
+            color: var(--danger);
+            border: 2px solid var(--danger);
         }
+        .issue-btn:active { background: var(--danger); color: #fff; }
 
-        /* Modal for Issue Input */
+        .expense-btn {
+            background: #fff;
+            color: var(--success);
+            border: 2px solid var(--success);
+        }
+        .expense-btn:active { background: var(--success); color: #fff; }
+
+        /* Modal Generic */
         .modal {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.6); z-index: 200; align-items: center; justify-content: center;
+            backdrop-filter: blur(4px);
         }
         .modal-content {
-            background: #fff; padding: 20px; border-radius: 16px; width: 85%; max-width: 400px;
+            background: #fff; padding: 25px; border-radius: 20px; width: 85%; max-width: 400px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         }
-        .modal-title { font-size: 18px; font-weight: 800; color: var(--danger); margin-bottom: 15px; }
+        .modal-title { font-size: 20px; font-weight: 800; margin-bottom: 20px; text-align: center; }
+        
+        /* Form Inputs */
+        .form-row { margin-bottom: 15px; }
+        .form-label { display: block; font-size: 13px; font-weight: 600; color: #666; margin-bottom: 5px; }
         .modal-input {
-            width: 100%; height: 120px; padding: 10px; border: 1px solid #ddd; border-radius: 8px;
-            font-size: 16px; box-sizing: border-box; resize: none; margin-bottom: 15px;
+            width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px;
+            font-size: 16px; box-sizing: border-box; background: #f9f9f9;
         }
-        .modal-actions { display: flex; gap: 10px; }
-        .m-btn { flex: 1; padding: 12px; border-radius: 8px; border: none; font-weight: bold; font-size: 16px; }
-        .m-cancel { background: #eee; color: #666; }
-        .m-submit { background: var(--danger); color: #fff; }
+        textarea.modal-input { resize: none; height: 80px; }
+        select.modal-input { background: #fff; }
+
+        .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+        .m-btn { flex: 1; padding: 12px; border-radius: 8px; border: none; font-weight: bold; font-size: 16px; cursor: pointer; }
+        .m-cancel { background: #f0f2f5; color: #666; }
+        .m-submit { background: var(--primary); color: #fff; }
+        .m-submit-red { background: var(--danger); color: #fff; }
 
         .finish-screen { display: none; text-align: center; padding: 60px 20px; }
         
@@ -240,7 +260,13 @@
             <div class="slider-handle" id="sliderHandle"></div>
         </div>
 
-        <button class="issue-btn" id="openIssueModal">⚠️ REPORT AN ISSUE / ASSISTANCE</button>
+        <button class="btn-block expense-btn" id="openExpenseModal">
+            💰 REQUEST EXPENSE (费用申请)
+        </button>
+
+        <button class="btn-block issue-btn" id="openIssueModal">
+            ⚠️ REPORT ISSUE (上报异常)
+        </button>
     </div>
 
     <div class="card finish-screen" id="finishArea">
@@ -253,11 +279,54 @@
 
 <div class="modal" id="issueModal">
     <div class="modal-content">
-        <div class="modal-title">REPORT ISSUE</div>
+        <div class="modal-title" style="color:var(--danger)">REPORT ISSUE</div>
         <textarea class="modal-input" id="issueInput" placeholder="Describe the problem (e.g., breakdown, border delay, accident)..."></textarea>
         <div class="modal-actions">
             <button class="m-btn m-cancel" id="closeIssueModal">CANCEL</button>
-            <button class="m-btn m-submit" id="submitIssue">SUBMIT</button>
+            <button class="m-btn m-submit-red" id="submitIssue">SUBMIT</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="expenseModal">
+    <div class="modal-content">
+        <div class="modal-title" style="color:var(--success)">NEW EXPENSE (费用申请)</div>
+        
+        <div class="form-row">
+            <label class="form-label">Expense Type (费用类型)</label>
+            <select class="modal-input" id="expType">
+                <option value="Fuel (燃油)">Fuel (燃油)</option>
+                <option value="Toll Gate (过路费)">Toll Gate (过路费)</option>
+                <option value="Parking (停车费)">Parking (停车费)</option>
+                <option value="Repair (维修)">Repair (维修)</option>
+                <option value="Fine (罚款)">Fine (罚款)</option>
+                <option value="Allowance (补贴)">Allowance (补贴)</option>
+                <option value="Other (其他)">Other (其他)</option>
+            </select>
+        </div>
+
+        <div class="form-row" style="display:flex; gap:10px;">
+            <div style="flex:1">
+                <label class="form-label">Amount (金额)</label>
+                <input type="number" class="modal-input" id="expAmount" placeholder="0.00">
+            </div>
+            <div style="width:80px">
+                <label class="form-label">Unit</label>
+                <select class="modal-input" id="expCurrency">
+                    <option value="ZMW">Kwacha</option>
+                    <option value="USD">USD</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <label class="form-label">Remark (备注/详情)</label>
+            <textarea class="modal-input" id="expRemark" style="height:60px" placeholder="Details..."></textarea>
+        </div>
+
+        <div class="modal-actions">
+            <button class="m-btn m-cancel" id="closeExpenseModal">CANCEL</button>
+            <button class="m-btn m-submit" id="submitExpense" style="background:var(--success)">SUBMIT</button>
         </div>
     </div>
 </div>
@@ -279,9 +348,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
-// Flow Definitions based on User Requirement
-// "label": The Passive Status shown to monitoring/driver (e.g., "Heading to Pickup")
-// "next": The Active Action for the slider (e.g., "Arrive Pickup")
 const FLOWS = {
     // 跨境流程 (Cross Border)
     cross_border: [
@@ -295,7 +361,7 @@ const FLOWS = {
         {step:8, key:'arrived_dropoff', label:'Unloading', next:'Finish Unload'},
         {step:9, key:'unloaded', label:'Order Complete', next:'Complete Order'}
     ],
-    // 境内流程 (Domestic) - No Border Steps, added Weighbridge/Release
+    // 境内流程 (Domestic)
     domestic: [
         {step:1, key:'confirmed', label:'Heading to Pickup', next:'Arrive Pickup'},
         {step:2, key:'arrived_pickup', label:'Loading in Progress', next:'Finish Loading'},
@@ -310,7 +376,7 @@ const urlParams = new URLSearchParams(window.location.search);
 const orderId = urlParams.get('id');
 let currentOrderData = null;
 let currentStep = 1;
-let currentFlow = []; // Will be set based on order type
+let currentFlow = []; 
 
 if (!orderId) {
     document.getElementById('loading').innerHTML = "INVALID LINK";
@@ -322,11 +388,8 @@ if (!orderId) {
             return;
         }
         currentOrderData = data;
-        
-        // Select Flow based on type, default to cross_border if missing (compatibility)
         const type = data.orderType || 'cross_border';
         currentFlow = FLOWS[type] || FLOWS.cross_border;
-        
         render(data, type);
         document.getElementById('loading').style.display = 'none';
         document.getElementById('app').style.display = 'block';
@@ -346,15 +409,12 @@ function render(data, type) {
 
     currentStep = data.statusStep || 1;
     
-    // Check if finished
     if (currentStep > currentFlow.length) {
         document.getElementById('actionArea').style.display = 'none';
         document.getElementById('finishArea').style.display = 'block';
     } else {
         const s = currentFlow[currentStep-1];
-        // Display the "Current Status" (Passive)
         document.getElementById('statusLabel').innerText = s.label; 
-        // Display the "Next Action" (Active) on slider
         document.getElementById('nextStatusLabel').innerText = "SLIDE: " + s.next;
     }
 }
@@ -364,7 +424,6 @@ setInterval(() => {
     if (!currentOrderData || !currentFlow.length || currentStep > currentFlow.length) return;
     const key = currentFlow[currentStep-1].key;
     const ts = currentOrderData.statusTimestamps || {};
-    // Use the step specific start time, or order start time for first step
     const start = (ts[key] && ts[key].start) ? ts[key].start : currentOrderData.startTime;
     
     if (!start) return;
@@ -378,39 +437,77 @@ setInterval(() => {
     timerEl.className = diff > 12 * 3600000 ? "timer-val timer-red" : "timer-val timer-green";
 }, 1000);
 
-// Issue Modal Controls
+// --- Issue Reporting Logic ---
 const issueModal = document.getElementById('issueModal');
-const issueInput = document.getElementById('issueInput');
 document.getElementById('openIssueModal').onclick = () => { issueModal.style.display = 'flex'; };
 document.getElementById('closeIssueModal').onclick = () => { issueModal.style.display = 'none'; };
 document.getElementById('submitIssue').onclick = async () => {
-    const text = issueInput.value.trim();
+    const text = document.getElementById('issueInput').value.trim();
     if(!text) return;
-
-    const issueData = {
-        message: text,
-        timestamp: Date.now(),
-        dateStr: new Date().toLocaleString()
-    };
-
     try {
         const currentIssues = currentOrderData.issues || [];
-        currentIssues.push(issueData);
-        
+        currentIssues.push({
+            message: text,
+            timestamp: Date.now(),
+            dateStr: new Date().toLocaleString()
+        });
         await update(ref(db, `tms/orders/${orderId}`), {
             issues: currentIssues,
             hasActiveIssue: true
         });
-
-        issueInput.value = "";
+        document.getElementById('issueInput').value = "";
         issueModal.style.display = 'none';
         alert("Report submitted successfully.");
+    } catch (e) { alert("Submit failed."); }
+};
+
+// --- Expense Reporting Logic (New) ---
+const expModal = document.getElementById('expenseModal');
+document.getElementById('openExpenseModal').onclick = () => { expModal.style.display = 'flex'; };
+document.getElementById('closeExpenseModal').onclick = () => { expModal.style.display = 'none'; };
+
+document.getElementById('submitExpense').onclick = async () => {
+    const type = document.getElementById('expType').value;
+    const amount = document.getElementById('expAmount').value;
+    const currency = document.getElementById('expCurrency').value;
+    const remark = document.getElementById('expRemark').value;
+
+    if(!amount) { alert("Please enter amount."); return; }
+
+    // 自动判断司机名称（优先取 Order 数据中的 driverName，没有则用车牌号代替）
+    const driverName = currentOrderData.driverName || currentOrderData.tractor || "Unknown Driver";
+
+    const payload = {
+        driverName: driverName,
+        plate: currentOrderData.tractor || "N/A", // 附带车牌号
+        orderId: orderId, // 关联订单号
+        amount: amount + " " + currency, // 例如: 500 ZMW
+        type: type,
+        remark: remark,
+        status: 'pending', // 初始状态为待审批
+        timestamp: Date.now(),
+        createdStr: new Date().toLocaleString()
+    };
+
+    try {
+        // 写入到 OA 模块监听的路径
+        await push(ref(db, 'tms/oa/driver_expenses'), payload);
+        
+        // 同时也把这个费用记录写回 Order 详情里备份 (可选，方便在订单里查看)
+        // const orderExp = currentOrderData.expenses || [];
+        // orderExp.push(payload);
+        // await update(ref(db, `tms/orders/${orderId}`), { expenses: orderExp });
+
+        document.getElementById('expAmount').value = "";
+        document.getElementById('expRemark').value = "";
+        expModal.style.display = 'none';
+        alert("Expense Request Sent! Waiting for Approval.\n费用已申请，等待审批。");
     } catch (e) {
-        alert("Submit failed.");
+        alert("Error sending request: " + e.message);
     }
 };
 
-// Slider Logic
+// --- Slider Logic ---
 const wrapper = document.getElementById('sliderWrapper');
 const handle = document.getElementById('sliderHandle');
 const bg = document.getElementById('sliderBg');
@@ -424,7 +521,6 @@ async function confirmStep() {
     const dur = currentOrderData.durations || {};
     const currentStateObj = currentFlow[currentStep-1];
     
-    // Close current step
     const key = currentStateObj.key;
     if (ts[key] && ts[key].start) {
         dur[key] = (dur[key] || 0) + (now - ts[key].start);
@@ -432,21 +528,17 @@ async function confirmStep() {
         delete ts[key].start;
     }
 
-    // Prepare next step
     let updatePayload = {
         statusStep: target,
         statusTimestamps: ts,
         durations: dur,
-        // Save the readable status string for Dynamic Monitoring Dashboard
-        status: currentStateObj.label // Save current status before moving? No, usually save the status we are IN. 
-        // Better logic: The loop sets what we ARE doing.
+        status: currentStateObj.label 
     };
     
-    // If there is a next step, init it
     if (target <= currentFlow.length) {
         const nextStateObj = currentFlow[target-1];
         ts[nextStateObj.key] = { start: now };
-        updatePayload.status = nextStateObj.label; // Update the Main Status String
+        updatePayload.status = nextStateObj.label; 
     } else {
         updatePayload.status = "Completed";
     }
