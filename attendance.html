@@ -9,11 +9,15 @@
     <style>
         :root {
             --primary: #1e63d8;
+            --primary-light: #5d9cfc;
             --success: #27ae60;
             --warning: #f39c12;
             --danger: #e74c3c;
             --bg: linear-gradient(135deg, #e9f3ff 0%, #dbe9ff 100%);
-            --glass: rgba(255, 255, 255, 0.8);
+            --glass: rgba(255, 255, 255, 0.95);
+            --gray-light: #f8f9fa;
+            --gray: #6c757d;
+            --gray-dark: #495057;
         }
 
         body {
@@ -29,51 +33,105 @@
         .card {
             background: var(--glass);
             backdrop-filter: blur(10px);
-            border-radius: 20px;
+            border-radius: 16px;
             padding: 25px;
-            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.1);
+            box-shadow: 0 4px 20px rgba(31, 38, 135, 0.08);
             margin-bottom: 20px;
-            border: 1px solid rgba(255,255,255,0.3);
+            border: 1px solid rgba(255,255,255,0.6);
         }
 
         /* 顶部导航 */
         .nav-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .nav-title { color: var(--primary); font-weight: 800; font-size: 20px; }
-        .view-tabs { display: flex; gap: 10px; background: rgba(0,0,0,0.05); padding: 5px; border-radius: 12px; }
-        .tab { padding: 8px 15px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; color: #666; transition: 0.3s; }
+        .nav-title { color: var(--primary); font-weight: 800; font-size: 20px; cursor: pointer; }
+        .view-tabs { display: flex; gap: 8px; background: rgba(0,0,0,0.05); padding: 4px; border-radius: 12px; }
+        .tab { padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; color: #666; transition: 0.3s; border: none; background: transparent; }
         .tab.active { background: white; color: var(--primary); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .tab:hover { background: rgba(255,255,255,0.5); }
+
+        /* 拦截界面 */
+        .gatekeeper { text-align: center; padding: 50px 20px; }
+        .gate-icon { font-size: 60px; margin-bottom: 20px; color: var(--primary); }
 
         /* 打卡界面 */
-        .punch-area { text-align: center; padding: 40px 0; }
+        .punch-area { text-align: center; padding: 30px 0; }
         .circle-btn {
-            width: 160px; height: 160px; border-radius: 50%; border: none;
-            background: white; color: var(--primary); font-size: 20px; font-weight: 800;
-            box-shadow: 0 10px 25px rgba(30,99,216,0.2); cursor: pointer;
-            margin: 20px auto; transition: 0.3s; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            width: 150px; height: 150px; border-radius: 50%; border: 4px solid rgba(255,255,255,0.5);
+            background: linear-gradient(145deg, #ffffff, #f0f0f0); 
+            color: var(--primary); font-size: 18px; font-weight: 800;
+            box-shadow: 5px 5px 15px rgba(30,99,216,0.15), -5px -5px 15px #ffffff; 
+            cursor: pointer; margin: 15px auto; transition: 0.2s; display: flex; flex-direction: column; align-items: center; justify-content: center;
         }
-        .circle-btn:disabled { background: #ccc; color: #666; box-shadow: none; cursor: not-allowed; }
-        .circle-btn.out { color: var(--warning); }
-        .loc-info { font-size: 12px; color: #666; margin-top: 15px; }
+        .circle-btn:active { transform: scale(0.95); }
+        .circle-btn.out { color: var(--primary-light); }
+        .loc-info { font-size: 12px; color: #666; margin-top: 15px; background: rgba(255,255,255,0.5); padding: 8px; border-radius: 20px; display: inline-block;}
 
         /* 表格样式 */
-        .table-w { overflow-x: auto; margin-top: 15px; }
-        table { width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; }
-        th { background: #f8f9fc; padding: 12px; text-align: left; font-size: 13px; color: #666; border-bottom: 2px solid #eee; }
-        td { padding: 12px; border-bottom: 1px solid #eee; font-size: 14px; }
+        .table-w { overflow-x: auto; margin-top: 15px; border-radius: 10px; border: 1px solid #eee; }
+        table { width: 100%; border-collapse: collapse; background: white; }
+        th { background: #f1f3f9; padding: 12px; text-align: left; font-size: 13px; color: #555; font-weight: bold; border-bottom: 2px solid #e1e4e8; }
+        td { padding: 12px; border-bottom: 1px solid #eee; font-size: 13px; color: #333; }
+        tr:last-child td { border-bottom: none; }
+        
+        /* 异常行高亮 (浅黄色) */
+        tr.row-warning { background-color: #fffbe6 !important; }
+        tr.row-warning td { color: #856404; }
+
+        /* 筛选栏 */
+        .filter-bar { 
+            display: flex; 
+            flex-wrap: wrap; 
+            gap: 10px; 
+            margin-bottom: 15px; 
+            align-items: center; 
+            padding: 10px; 
+            background: var(--gray-light); 
+            border-radius: 8px; 
+        }
+        .filter-bar input, .filter-bar select, .filter-bar button {
+            padding: 8px 12px; 
+            border-radius: 6px; 
+            border: 1px solid #ddd; 
+            font-size: 13px;
+        }
+        .filter-bar button {
+            background: var(--primary-light); 
+            color: white; 
+            border: none; 
+            cursor: pointer;
+        }
+        .filter-bar button:hover { background: var(--primary); }
 
         /* 注册表单 */
         .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; font-size: 13px; margin-bottom: 5px; color: #666; }
-        .input { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #ddd; box-sizing: border-box; }
-        .btn-primary { width: 100%; padding: 15px; background: var(--primary); color: white; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; }
+        .form-group label { display: block; font-size: 13px; margin-bottom: 6px; color: #555; font-weight: 600; }
+        .input { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ddd; box-sizing: border-box; font-size: 14px; transition: 0.3s; }
+        .input:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(30,99,216,0.1); }
+        .btn-primary { width: 100%; padding: 14px; background: var(--primary-light); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 15px; transition: 0.3s; }
+        .btn-primary:hover { background: var(--primary); }
 
-        /* 管理面板 */
-        .admin-section { display: none; margin-top: 20px; border-top: 2px dashed #ddd; padding-top: 20px; }
-        .qr-pop { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 1000; }
+        /* 状态标签 */
+        .status-pill { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; display: inline-block; }
+        .sp-norm { background: #e3f2fd; color: var(--primary); }
+        .sp-warn { background: #fff3e0; color: #856404; }
 
-        .status-pill { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
-        .sp-in { background: #e8f5e9; color: var(--success); }
-        .sp-out { background: #fff3e0; color: var(--warning); }
+        .qr-pop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(5px); }
+        
+        /* 打印专用样式 */
+        @media print {
+            body { background: white; color: black; }
+            .nav-header, .circle-btn, .qr-pop, .view-tabs, button, .loc-info, #view-blocked, #view-register, #view-punch, #view-history, #view-admin, .filter-bar { 
+                display: none !important; 
+            }
+            .container { max-width: 100%; margin: 0; padding: 0; }
+            .card { box-shadow: none; border: none; padding: 0; backdrop-filter: none; background: white; }
+            #view-today { display: block !important; margin: 0; }
+            .table-w { overflow: visible; border: 1px solid #000; }
+            table { width: 100%; border: 1px solid #000; }
+            th, td { border: 1px solid #000; color: black !important; padding: 8px; }
+            tr.row-warning { background-color: #f0f0f0 !important; -webkit-print-color-adjust: exact; }
+            h3 { text-align: center; font-size: 18px; margin-bottom: 10px; }
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        }
 
         [v-cloak] { display: none; }
     </style>
@@ -82,24 +140,32 @@
 
 <div class="container">
     <div class="nav-header">
-        <div class="nav-title" onclick="location.href='index.html'">TMS ATTENDANCE</div>
+        <div class="nav-title" onclick="location.reload()">TMS ATTENDANCE</div>
         <div class="view-tabs" id="managerTabs" style="display:none;">
-            <div class="tab active" onclick="switchView('today')">今日</div>
-            <div class="tab" onclick="switchView('history')">历史</div>
-            <div id="adminTab" class="tab" style="display:none;" onclick="switchView('admin')">管理</div>
+            <button class="tab active" onclick="switchView('today')">今日 (Today)</button>
+            <button class="tab" onclick="switchView('history')">历史 (History)</button>
+            <button id="adminTab" class="tab" style="display:none;" onclick="switchView('admin')">管理 (Admin)</button>
+        </div>
+    </div>
+
+    <div id="view-blocked" class="card">
+        <div class="gatekeeper">
+            <div class="gate-icon">🛡️</div>
+            <h2>访问受限 / Access Restricted</h2>
+            <p style="color:#666; margin: 20px 0;">为确保数据安全，请使用现场二维码扫描进入考勤系统。<br>Please scan the on-site QR code to access.</p>
         </div>
     </div>
 
     <div id="view-register" class="card" style="display:none;">
-        <h2 style="text-align:center; color:var(--primary)">员工首次登记</h2>
-        <p style="text-align:center; font-size:12px; color:#888;">系统将记录您的设备ID，以后无需再次输入</p>
+        <h2 style="text-align:center; color:var(--primary)">员工绑定 / Activation</h2>
+        <p style="text-align:center; font-size:12px; color:#888; margin-bottom:20px;">首次使用请录入信息 (First time setup)</p>
         <div class="form-group">
             <label>姓名 Name</label>
             <input type="text" id="regName" class="input" placeholder="请输入真实姓名">
         </div>
         <div class="form-group">
             <label>工号 Employee ID</label>
-            <input type="text" id="regID" class="input" placeholder="请输入员工ID">
+            <input type="text" id="regID" class="input" placeholder="例如: DRV001">
         </div>
         <div class="form-group">
             <label>部门 Department</label>
@@ -110,64 +176,101 @@
                 <option value="Workshop">维修车间 Workshop</option>
             </select>
         </div>
-        <button class="btn-primary" onclick="handleRegister()">绑定并进入打卡</button>
+        <button class="btn-primary" onclick="handleRegister()">确认绑定 (Confirm)</button>
     </div>
 
     <div id="view-punch" class="card" style="display:none;">
         <div class="punch-area">
-            <div id="greeting" style="font-weight:bold; font-size:18px; margin-bottom:5px;">Hello, User</div>
-            <div id="currentTime" style="font-size:24px; font-weight:bold; color:var(--primary)">00:00:00</div>
+            <div id="greeting" style="font-weight:bold; font-size:18px; color:#444;">Hello</div>
+            <div id="currentDate" style="font-size:14px; color:#888; margin-top:5px;"></div>
+            <div id="currentTime" style="font-size:32px; font-weight:800; color:var(--primary); margin: 10px 0;">00:00:00</div>
             
-            <button class="circle-btn" id="btnPunchIn" onclick="doPunch('IN')">
-                <span>到岗打卡</span>
-                <small style="font-size:12px; opacity:0.7">CLOCK IN</small>
-            </button>
-            <button class="circle-btn out" id="btnPunchOut" onclick="doPunch('OUT')">
-                <span>离岗打卡</span>
-                <small style="font-size:12px; opacity:0.7">CLOCK OUT</small>
-            </button>
+            <div style="display:flex; justify-content: center; gap: 20px;">
+                <button class="circle-btn" id="btnPunchIn" onclick="doPunch('IN')">
+                    <span style="font-size:24px;">上班</span>
+                    <span style="font-size:12px; opacity:0.7; margin-top:5px;">CLOCK IN</span>
+                </button>
+                <button class="circle-btn out" id="btnPunchOut" onclick="doPunch('OUT')">
+                    <span style="font-size:24px;">下班</span>
+                    <span style="font-size:12px; opacity:0.7; margin-top:5px;">CLOCK OUT</span>
+                </button>
+            </div>
 
-            <div class="loc-info" id="locStatus">正在获取地理位置...</div>
+            <div class="loc-info" id="locStatus">📡 定位中... / Locating...</div>
         </div>
     </div>
 
     <div id="view-today" class="card" style="display:none;">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-            <h3>今日考勤汇总</h3>
-            <button onclick="showQR()" style="background:none; border:none; color:var(--primary); cursor:pointer;">生成入口二维码</button>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;" class="no-print">
+            <h3 style="margin:0;">今日实时考勤</h3>
+            <div style="display:flex; gap:10px;">
+                <button onclick="printToday()" style="background:var(--gray); color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-size:12px;">🖨️ 导出PDF/打印</button>
+                <button onclick="showQR()" style="background:var(--primary-light); color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; font-size:12px;">📱 生成入口二维码</button>
+            </div>
         </div>
+        
+        <div style="display:none; text-align:center; margin-bottom:20px;" id="printHeader">
+            <h2>TMS Daily Attendance Report</h2>
+            <p id="printDate"></p>
+        </div>
+
         <div class="table-w">
             <table>
                 <thead>
-                    <tr><th>姓名</th><th>工号</th><th>部门</th><th>到岗时间</th><th>离岗时间</th><th>状态</th></tr>
+                    <tr>
+                        <th>姓名 Name</th>
+                        <th>部门 Dept</th>
+                        <th>上班 Check-In</th>
+                        <th>下班 Check-Out</th>
+                        <th>状态 Status</th>
+                    </tr>
                 </thead>
                 <tbody id="todayTableBody"></tbody>
             </table>
+        </div>
+        <div style="margin-top:10px; font-size:12px; color:#666;">
+            <span style="display:inline-block; width:12px; height:12px; background:#fffbe6; border:1px solid #ccc; vertical-align:middle;"></span> 
+            黄色标记表示异常：迟到(>08:30) 或 早退(<17:30)
         </div>
     </div>
 
     <div id="view-history" class="card" style="display:none;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-            <h3>考勤报表 (近10天)</h3>
-            <div style="display:flex; gap:10px;">
-                <button onclick="loadPreviousMonth()" class="tab">上月</button>
-                <button onclick="exportHistory()" style="background:var(--success); color:white; border:none; padding:8px 15px; border-radius:8px;">导出 Excel</button>
-            </div>
+            <h3 style="margin:0;">历史记录 (History)</h3>
         </div>
+
+        <div class="filter-bar">
+            <input type="text" id="histSearchName" placeholder="搜索姓名 / Search Name">
+            <input type="date" id="histStartDate" placeholder="开始日期">
+            <input type="date" id="histEndDate" placeholder="结束日期">
+            <button onclick="applyHistoryFilter()">筛选 / Filter</button>
+            <button onclick="resetHistoryFilter()">重置 / Reset</button>
+            <button onclick="exportFilteredHistory()" style="background:var(--primary-light);">📥 导出当前 Excel</button>
+        </div>
+
         <div class="table-w">
             <table id="historyTable">
-                <thead id="historyHead"></thead>
+                <thead>
+                    <tr>
+                        <th>日期 Date</th>
+                        <th>姓名 Name</th>
+                        <th>部门 Dept</th>
+                        <th>上班 In</th>
+                        <th>下班 Out</th>
+                        <th>状态 Note</th>
+                    </tr>
+                </thead>
                 <tbody id="historyBody"></tbody>
             </table>
         </div>
     </div>
 
     <div id="view-admin" class="card" style="display:none;">
-        <h3>员工设备管理</h3>
+        <h3>设备绑定管理 (Device Mgmt)</h3>
         <div class="table-w">
             <table>
                 <thead>
-                    <tr><th>姓名</th><th>工号</th><th>设备标识</th><th>操作</th></tr>
+                    <tr><th>姓名</th><th>工号</th><th>设备ID</th><th>操作</th></tr>
                 </thead>
                 <tbody id="deviceTableBody"></tbody>
             </table>
@@ -177,18 +280,19 @@
 </div>
 
 <div class="qr-pop" id="qrPop" onclick="this.style.display='none'">
-    <div style="background:white; padding:30px; border-radius:20px; text-align:center;">
-        <div id="qrcode"></div>
-        <p style="margin-top:15px; font-weight:bold;">考勤入口二维码</p>
-        <p style="font-size:12px; color:#666;" id="qrLinkText"></p>
+    <div style="background:white; padding:30px; border-radius:20px; text-align:center; max-width:90%;" onclick="event.stopPropagation()">
+        <h3 style="margin-top:0; color:var(--primary)">扫描进入考勤</h3>
+        <div id="qrcode" style="display:flex; justify-content:center; margin:20px 0;"></div>
+        <p style="font-size:12px; color:#666; margin-bottom:5px;">请员工使用手机浏览器扫描此码</p>
+        <p style="font-size:11px; color:#999;">Only via this QR code can users access registration.</p>
+        <button onclick="document.getElementById('qrPop').style.display='none'" style="margin-top:10px; padding:8px 20px; border:1px solid #ddd; background:white; border-radius:20px;">关闭</button>
     </div>
 </div>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-    import { getDatabase, ref, set, get, push, update, onValue } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+    import { getDatabase, ref, set, get, update, onValue } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
 
-    // 1. 配置 (同步 Vehicles.html)
     const firebaseConfig = {
         apiKey: "AIzaSyDEbePpsrXwD8Okqa93UOGUFE37c8SFHS0",
         authDomain: "cjsmartcargo-datebase.firebaseapp.com",
@@ -202,28 +306,48 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    // 2. 常量定义
-    const TARGET_LOC = { lat: -15.283139, lng: 28.272167 }; // 15°16'59.3"S 28°16'19.8"E
-    const RADIUS = 0.5; // 500米 = 0.5km
+    const TARGET_LOC = { lat: -15.283139, lng: 28.272167 }; 
+    const RADIUS = 0.5; // km
     const ROLE = localStorage.getItem('tms_role') || 'driver';
+    const SECURE_KEY = 'secure';
+
+    const TIME_LATE = "08:30:00";
+    const TIME_EARLY = "17:30:00";
+
     let deviceFingerprint = localStorage.getItem('tms_device_id');
     let currentUser = null;
     let canPunch = false;
+    let hasAccess = false;
 
-    // 3. 初始化
+    // 历史记录全局数据与过滤后数据
+    let allHistoryData = []; // 原始完整记录（数组形式）
+    let filteredHistoryData = []; // 当前显示的记录
+
     window.onload = async () => {
-        // 时间更新
         setInterval(() => {
-            document.getElementById('currentTime').innerText = new Date().toLocaleTimeString();
+            const now = new Date();
+            document.getElementById('currentTime').innerText = now.toLocaleTimeString('en-GB');
+            document.getElementById('currentDate').innerText = now.toDateString();
         }, 1000);
 
-        // 管理员权限展示
         if(ROLE === 'admin' || ROLE === 'staff') {
             document.getElementById('managerTabs').style.display = 'flex';
             if(ROLE === 'admin') document.getElementById('adminTab').style.display = 'block';
+            hasAccess = true;
         }
 
-        // 设备指纹初始化
+        const urlParams = new URLSearchParams(window.location.search);
+        const accessCode = urlParams.get('access');
+        
+        if(accessCode === SECURE_KEY || hasAccess) {
+            hasAccess = true;
+            initSystem();
+        } else {
+            showView('blocked');
+        }
+    };
+
+    async function initSystem() {
         if(!deviceFingerprint) {
             deviceFingerprint = 'DEV-' + Math.random().toString(36).substr(2, 9).toUpperCase();
             localStorage.setItem('tms_device_id', deviceFingerprint);
@@ -231,37 +355,37 @@
 
         checkBinding();
         startLocationWatch();
-    };
+    }
 
-    // 4. 设备绑定逻辑
     async function checkBinding() {
         const snapshot = await get(ref(db, `tms/attendance/users/${deviceFingerprint}`));
         if(snapshot.exists()) {
             currentUser = snapshot.val();
-            showView('punch');
-            document.getElementById('greeting').innerText = `Hello, ${currentUser.name} (${currentUser.dept})`;
+            if(document.getElementById('view-today').style.display === 'none') {
+                showView('punch');
+            }
+            document.getElementById('greeting').innerText = `Hi, ${currentUser.name}`;
         } else {
             showView('register');
         }
     }
 
     window.handleRegister = async () => {
-        const name = document.getElementById('regName').value;
-        const eid = document.getElementById('regID').value;
+        const name = document.getElementById('regName').value.trim();
+        const eid = document.getElementById('regID').value.trim();
         const dept = document.getElementById('regDept').value;
-        if(!name || !eid) return alert("请填写完整信息");
+        if(!name || !eid) return alert("请填写完整信息 (Please fill all fields)");
 
         const userData = { name, eid, dept, deviceId: deviceFingerprint, boundAt: Date.now() };
         await set(ref(db, `tms/attendance/users/${deviceFingerprint}`), userData);
-        currentUser = userData;
-        showView('punch');
-        alert("绑定成功！");
+        
+        alert("绑定成功 (Success)!");
+        checkBinding();
     };
 
-    // 5. 地理位置逻辑
     function startLocationWatch() {
         if (!navigator.geolocation) {
-            document.getElementById('locStatus').innerText = "浏览器不支持定位";
+            document.getElementById('locStatus').innerText = "不支持定位";
             return;
         }
 
@@ -272,18 +396,17 @@
             
             const statusEl = document.getElementById('locStatus');
             if(isInRange) {
-                statusEl.innerHTML = `<span style="color:var(--success)">● 已在打卡范围内 (距离:${(dist*1000).toFixed(0)}m)</span>`;
+                statusEl.innerHTML = `<span style="color:var(--primary)">✅ 已在考勤点 (Range: ${(dist*1000).toFixed(0)}m)</span>`;
             } else {
-                statusEl.innerHTML = `<span style="color:var(--danger)">× 超出范围 (距离:${(dist*1000).toFixed(0)}m, 请进入500米内)</span>`;
+                statusEl.innerHTML = `<span style="color:var(--danger)">⛔ 超出范围 (Range: ${(dist*1000).toFixed(0)}m, limit 500m)</span>`;
             }
         }, (err) => {
-            document.getElementById('locStatus').innerText = "无法获取位置，请开启GPS";
+            document.getElementById('locStatus').innerText = "❌ 无法获取位置 (GPS Error)";
         }, { enableHighAccuracy: true });
     }
 
-    // 哈弗辛公式计算距离(km)
     function getDistance(lat1, lon1, lat2, lon2) {
-        const R = 6371; 
+        const R = 6371;
         const dLat = (lat2 - lat1) * Math.PI / 180;
         const dLon = (lon2 - lon1) * Math.PI / 180;
         const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
@@ -292,30 +415,43 @@
         return R * c;
     }
 
-    // 6. 打卡动作
     window.doPunch = async (type) => {
-        if(!canPunch) return alert("打卡失败：您不在规定范围内！");
+        if(!canPunch) return alert("打卡失败：您不在规定范围内！(Out of Range)");
         
         const today = new Date().toISOString().split('T')[0];
-        const nowTime = new Date().toLocaleTimeString('zh-CN', {hour12:false});
+        const now = new Date();
+        const nowTime = now.toLocaleTimeString('en-GB', {hour12:false});
         
         const logPath = `tms/attendance/logs/${today}/${currentUser.eid}`;
-        const updateData = {};
-        if(type === 'IN') updateData.checkIn = nowTime;
-        else updateData.checkOut = nowTime;
         
-        updateData.name = currentUser.name;
-        updateData.dept = currentUser.dept;
-        updateData.eid = currentUser.eid;
+        const currentLogSnap = await get(ref(db, logPath));
+        let logData = currentLogSnap.exists() ? currentLogSnap.val() : {};
 
-        await update(ref(db, logPath), updateData);
-        alert(`${type === 'IN' ? '到岗' : '离岗'}打卡成功！时间：${nowTime}`);
+        if(type === 'IN') {
+            if(logData.checkIn) if(!confirm("您今天已签到，是否更新签到时间？")) return;
+            logData.checkIn = nowTime;
+        } else {
+            logData.checkOut = nowTime;
+        }
+        
+        logData.name = currentUser.name;
+        logData.dept = currentUser.dept;
+        logData.eid = currentUser.eid;
+
+        await update(ref(db, logPath), logData);
+        alert(`${type === 'IN' ? '上班' : '下班'}打卡成功！时间：${nowTime}`);
     };
 
-    // 7. 管理端逻辑
     window.switchView = (viewId) => {
+        if(!hasAccess) return alert("Access Denied");
+
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        event.target.classList.add('active');
+        if(viewId === 'admin') document.getElementById('adminTab').classList.add('active');
+        else {
+             const tabs = document.querySelectorAll('.tab');
+             if(viewId === 'today') tabs[0].classList.add('active');
+             if(viewId === 'history') tabs[1].classList.add('active');
+        }
         
         if(viewId === 'today') loadTodayRecords();
         if(viewId === 'history') loadHistoryRecords();
@@ -326,19 +462,42 @@
 
     function loadTodayRecords() {
         const today = new Date().toISOString().split('T')[0];
+        document.getElementById('printDate').innerText = `Date: ${today}`;
+
         onValue(ref(db, `tms/attendance/logs/${today}`), (snapshot) => {
             const list = snapshot.val() || {};
             const tbody = document.getElementById('todayTableBody');
             tbody.innerHTML = "";
+
+            if(Object.keys(list).length === 0) {
+                tbody.innerHTML = "<tr><td colspan='5' style='text-align:center'>暂无打卡记录</td></tr>";
+                return;
+            }
+
             Object.values(list).forEach(r => {
+                const inTime = r.checkIn || "--";
+                const outTime = r.checkOut || "--";
+                
+                let isLate = false;
+                let isEarly = false;
+
+                if(r.checkIn && r.checkIn > "08:30:00") isLate = true;
+                if(r.checkOut && r.checkOut < "17:30:00") isEarly = true;
+
+                let rowClass = (isLate || isEarly) ? "row-warning" : "";
+                
+                let statusText = "正常 (Normal)";
+                if(isLate && isEarly) statusText = "迟到 & 早退";
+                else if(isLate) statusText = "迟到 (Late)";
+                else if(isEarly) statusText = "早退 (Early Leave)";
+
                 tbody.innerHTML += `
-                    <tr>
-                        <td>${r.name}</td>
-                        <td>${r.eid}</td>
+                    <tr class="${rowClass}">
+                        <td><b>${r.name}</b></td>
                         <td>${r.dept}</td>
-                        <td style="color:var(--success)">${r.checkIn || '--'}</td>
-                        <td style="color:var(--warning)">${r.checkOut || '--'}</td>
-                        <td><span class="status-pill sp-in">已打卡</span></td>
+                        <td style="color:${isLate ? '#856404' : 'inherit'}">${inTime}</td>
+                        <td style="color:${isEarly ? '#856404' : 'inherit'}">${outTime}</td>
+                        <td><span class="status-pill ${rowClass ? 'sp-warn' : 'sp-norm'}">${statusText}</span></td>
                     </tr>`;
             });
         });
@@ -347,30 +506,80 @@
     async function loadHistoryRecords() {
         const snapshot = await get(ref(db, `tms/attendance/logs`));
         const allLogs = snapshot.val() || {};
-        const userSnap = await get(ref(db, `tms/attendance/users`));
-        const users = Object.values(userSnap.val() || {});
+        allHistoryData = [];
+        filteredHistoryData = [];
 
-        const dates = Object.keys(allLogs).sort().reverse().slice(0, 10);
-        
-        // Header
-        let headHtml = "<tr><th>员工名册</th>";
-        dates.forEach(d => headHtml += `<th>${d.substr(5)}</th>`);
-        headHtml += "</tr>";
-        document.getElementById('historyHead').innerHTML = headHtml;
+        Object.keys(allLogs).sort().reverse().forEach(date => {
+            Object.values(allLogs[date]).forEach(r => {
+                let status = "正常";
+                if(r.checkIn && r.checkIn > "08:30:00") status = "迟到";
+                if(r.checkOut && r.checkOut < "17:30:00") status += (status==="正常"?"早退":" & 早退");
 
-        // Body
-        let bodyHtml = "";
-        users.forEach(u => {
-            bodyHtml += `<tr><td><b>${u.name}</b><br><small>${u.dept}</small></td>`;
-            dates.forEach(d => {
-                const log = allLogs[d] ? allLogs[d][u.eid] : null;
-                const status = log ? (log.checkIn ? "√" : "×") : "-";
-                const color = status === "√" ? "var(--success)" : "#ccc";
-                bodyHtml += `<td style="color:${color}; text-align:center">${status}</td>`;
+                const record = {
+                    date,
+                    name: r.name,
+                    eid: r.eid,
+                    dept: r.dept,
+                    checkIn: r.checkIn || '--',
+                    checkOut: r.checkOut || '--',
+                    status
+                };
+                allHistoryData.push(record);
             });
-            bodyHtml += "</tr>";
         });
-        document.getElementById('historyBody').innerHTML = bodyHtml;
+
+        // 默认显示全部（按日期倒序已排序）
+        applyHistoryFilter(true); // 初始加载时不过滤
+    }
+
+    window.applyHistoryFilter = (skipClear) => {
+        if(!skipClear) {
+            // 获取筛选条件
+            const searchName = document.getElementById('histSearchName').value.trim().toLowerCase();
+            const startDate = document.getElementById('histStartDate').value;
+            const endDate = document.getElementById('histEndDate').value;
+
+            filteredHistoryData = allHistoryData.filter(r => {
+                if(searchName && !r.name.toLowerCase().includes(searchName)) return false;
+                if(startDate && r.date < startDate) return false;
+                if(endDate && r.date > endDate) return false;
+                return true;
+            });
+        } else {
+            filteredHistoryData = allHistoryData.slice();
+        }
+
+        renderHistoryTable();
+    };
+
+    window.resetHistoryFilter = () => {
+        document.getElementById('histSearchName').value = '';
+        document.getElementById('histStartDate').value = '';
+        document.getElementById('histEndDate').value = '';
+        applyHistoryFilter(true);
+    };
+
+    function renderHistoryTable() {
+        const tbody = document.getElementById('historyBody');
+        tbody.innerHTML = "";
+
+        if(filteredHistoryData.length === 0) {
+            tbody.innerHTML = "<tr><td colspan='6' style='text-align:center'>无匹配记录</td></tr>";
+            return;
+        }
+
+        filteredHistoryData.forEach(r => {
+            tbody.innerHTML += `
+                <tr>
+                    <td>${r.date}</td>
+                    <td>${r.name}</td>
+                    <td>${r.dept}</td>
+                    <td>${r.checkIn}</td>
+                    <td>${r.checkOut}</td>
+                    <td>${r.status}</td>
+                </tr>
+            `;
+        });
     }
 
     async function loadAdminDevices() {
@@ -383,48 +592,62 @@
                 <tr>
                     <td>${u.name}</td>
                     <td>${u.eid}</td>
-                    <td style="font-family:monospace; font-size:12px;">${did}</td>
-                    <td><button onclick="unbindDevice('${did}')" style="color:var(--danger); border:none; background:none; cursor:pointer;">解绑</button></td>
+                    <td style="font-family:monospace; font-size:10px; color:#999">${did}</td>
+                    <td><button onclick="unbindDevice('${did}')" style="color:var(--danger); border:none; background:none; cursor:pointer;">解绑 Unbind</button></td>
                 </tr>`;
         });
     }
 
     window.unbindDevice = async (did) => {
-        if(confirm("确定要为该员工解除设备绑定吗？解绑后其手机需重新登记。")) {
+        if(confirm("Confirm to unbind device?")) {
             await set(ref(db, `tms/attendance/users/${did}`), null);
             loadAdminDevices();
         }
     };
 
-    // 8. 工具功能
     window.showQR = () => {
-        const url = window.location.href.split('?')[0];
+        const baseUrl = window.location.href.split('?')[0];
+        const secureUrl = `${baseUrl}?access=${SECURE_KEY}`;
+        
         document.getElementById('qrPop').style.display = 'flex';
         document.getElementById('qrcode').innerHTML = "";
-        new QRCode(document.getElementById("qrcode"), { text: url, width: 200, height: 200 });
-        document.getElementById('qrLinkText').innerText = url;
+        new QRCode(document.getElementById("qrcode"), { text: secureUrl, width: 200, height: 200 });
     };
 
-    window.exportHistory = async () => {
-        const snapshot = await get(ref(db, `tms/attendance/logs`));
-        const data = snapshot.val();
-        const rows = [];
-        Object.keys(data).forEach(date => {
-            Object.values(data[date]).forEach(r => {
-                rows.push({ "日期": date, "姓名": r.name, "部门": r.dept, "工号": r.eid, "到岗": r.checkIn, "离岗": r.checkOut });
-            });
-        });
+    window.printToday = () => {
+        window.print();
+    };
+
+    window.exportFilteredHistory = () => {
+        if(filteredHistoryData.length === 0) {
+            alert("当前无数据可导出");
+            return;
+        }
+
+        const rows = filteredHistoryData.map(r => ({
+            "Date 日期": r.date,
+            "Name 姓名": r.name,
+            "ID 工号": r.eid,
+            "Department 部门": r.dept,
+            "Check-In 上班": r.checkIn,
+            "Check-Out 下班": r.checkOut,
+            "Status 状态": r.status
+        }));
+
         const ws = XLSX.utils.json_to_sheet(rows);
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Attendance");
-        XLSX.writeFile(wb, `TMS_Attendance_Report.xlsx`);
+        XLSX.utils.book_append_sheet(wb, ws, "Attendance_History");
+        XLSX.writeFile(wb, `TMS_History_Filtered_${new Date().toISOString().slice(0,10)}.xlsx`);
     };
 
     function showView(id) {
-        const views = ['view-register', 'view-punch', 'view-today', 'view-history', 'view-admin'];
+        const views = ['view-blocked', 'view-register', 'view-punch', 'view-today', 'view-history', 'view-admin'];
         views.forEach(v => document.getElementById(v).style.display = (v === 'view-'+id ? 'block' : 'none'));
     }
 
+    window.loadTodayRecords = loadTodayRecords;
+    window.loadHistoryRecords = loadHistoryRecords;
+    window.loadAdminDevices = loadAdminDevices;
 </script>
 </body>
 </html>
