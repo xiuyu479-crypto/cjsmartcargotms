@@ -51,7 +51,8 @@ body{font-family:Arial,Helvetica,sans-serif;background:#f5f7fb;margin:0;color:#2
 </head>
 <body>
 <script>
-if(localStorage.getItem("tms_auth") !== "uki1998"){
+// --- 修复点：移除了 "uki1998" 硬编码，改为通用校验 ---
+if(!localStorage.getItem("tms_auth")){
   const page = location.pathname.split('/').pop();
   window.location.href = "password.html?redirect=" + encodeURIComponent(page);
 }

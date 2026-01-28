@@ -126,7 +126,7 @@ textarea{min-height:120px}
   <div class="card">
     <div style="font-weight:700;margin-bottom:8px" id="feesTitle" data-key="feesInfo">费用与备注</div>
     <div class="grid">
-      <div><label data-key="allowanceLabel">司机津贴 (ZMW)</label><input id="allowance" class="input" type="number" value="0"></div>
+      <div><label data-key="allowanceLabel">司机津贴 (ZMW/USD)</label><input id="allowance" class="input" type="number" value="0"></div>
       <div><label data-key="transitLabel">过境费用 (USD)</label><input id="transit" class="input" type="number" value="0"></div>
       <div style="grid-column:1 / -1"><label data-key="notesLabel">备注信息</label><textarea id="notes" class="input"></textarea></div>
     </div>
@@ -201,10 +201,11 @@ if (dispatchOrderId) {
       pickupAddrEl.value = data.loadP || "";
       dropoffAddrEl.value = data.offP || "";
       
+      // 修复点2：动态获取 Bonus 的单位，如果不存在则默认为 ZMW
       const feeNotes = `[Project: ${data.projectName}]\n` +
                        `Rate: ${data.fRate.val} ${data.fRate.unit}\n` +
                        `Trip Money: ${data.fTrip.val} ${data.fTrip.unit}\n` +
-                       `Bonus: ${data.fBonus ? data.fBonus.val : 0} ZMW`;
+                       `Bonus: ${data.fBonus ? data.fBonus.val : 0} ${data.fBonus && data.fBonus.unit ? data.fBonus.unit : 'ZMW'}`;
       notesEl.value = feeNotes;
       
       statusEl.innerText = lang === 'zh' ? "已自动填充预设项目信息" : "Project info auto-filled";
@@ -249,7 +250,7 @@ const langPack = {
     loadedFuelTotal: '重车油耗 (L)',
     totalFuel: '油料分配 (L)',
     feesInfo: '费用与备注',
-    allowanceLabel: '司机津贴 (ZMW)',
+    allowanceLabel: '司机津贴 (ZMW/USD)', // Updated label
     transitLabel: '过境费用 (USD)',
     notesLabel: '备注信息',
     saveDraft: '保存草稿',
@@ -296,7 +297,7 @@ const langPack = {
     loadedFuelTotal: 'Loaded Fuel (L)',
     totalFuel: 'Total Allocation (L)',
     feesInfo: 'Fees & Notes',
-    allowanceLabel: 'Allowance (ZMW)',
+    allowanceLabel: 'Allowance (ZMW/USD)', // Updated label
     transitLabel: 'Transit Fee (USD)',
     notesLabel: 'Remarks / Notes',
     saveDraft: 'Save Draft',
