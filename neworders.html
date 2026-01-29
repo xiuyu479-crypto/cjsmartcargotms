@@ -18,7 +18,8 @@
         .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; }
         .form-group { display: flex; flex-direction: column; gap: 5px; }
         label { font-size: 12px; color: #666; font-weight: 600; }
-        input, select { padding: 10px; border: 1px solid #dfe8ff; border-radius: 8px; }
+        input, select { padding: 10px; border: 1px solid #dfe8ff; border-radius: 8px; outline: none; }
+        input:focus, select:focus { border-color: var(--primary-color); }
         .v-tag-container { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
         .v-tag { background: var(--primary-color); color: white; padding: 4px 10px; border-radius: 6px; font-size: 12px; }
         .task-item { background: white; padding: 15px; border-radius: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid #ccc; }
@@ -63,30 +64,30 @@
                         <div class="form-group">
                             <label>预设运费 Rate</label>
                             <div style="display:flex;gap:5px">
-                                <input type="number" id="fRate" step="0.01">
-                                <select id="fRateUnit">
-                                    <option>USD</option>
-                                    <option>ZMW</option>
-                                </select>
+                                <select id="fRateUnit" style="width: 80px;"><option value="USD">USD</option><option value="ZMW">ZMW</option></select>
+                                <input type="number" id="fRate" step="0.01" style="flex:1" placeholder="金额">
                             </div>
                         </div>
                         <div class="form-group">
                             <label>Trip Money</label>
                             <div style="display:flex;gap:5px">
-                                <input type="number" id="fTrip">
-                                <select id="fTripUnit"><option>ZMW</option><option>USD</option></select>
+                                <select id="fTripUnit" style="width: 80px;"><option value="ZMW">ZMW</option><option value="USD">USD</option></select>
+                                <input type="number" id="fTrip" style="flex:1" placeholder="金额">
                             </div>
                         </div>
                         <div class="form-group">
                             <label>Bonus (奖金)</label>
                             <div style="display:flex;gap:5px">
-                                <input type="number" id="fBonus">
-                                <select id="fBonusUnit"><option>ZMW</option><option>USD</option></select>
+                                <select id="fBonusUnit" style="width: 80px;"><option value="ZMW">ZMW</option><option value="USD">USD</option></select>
+                                <input type="number" id="fBonus" style="flex:1" placeholder="金额">
                             </div>
                         </div>
                         <div class="form-group">
-                            <label>过境费用 Transit (USD)</label>
-                            <input type="number" id="fTransit" step="0.01">
+                            <label>过境费用 Transit</label>
+                            <div style="display:flex;gap:5px">
+                                <select id="fTransitUnit" style="width: 80px;"><option value="USD">USD</option><option value="ZMW">ZMW</option></select>
+                                <input type="number" id="fTransit" step="0.01" style="flex:1" placeholder="金额">
+                            </div>
                         </div>
                     </div>
                     <button type="submit" class="btn-main">确认并存入待发车</button>
@@ -150,7 +151,7 @@
 
             const batchId = Date.now();
             const promises = selectedVehicles.map(v => {
-                // 核心修复：构造包含数值和单位的费用对象，确保完整传递给 orders 后台
+                // 修改点：确保所有单位从当前页面的 select 框中实时抓取
                 return push(ref(db, 'tms/dispatch'), {
                     projectName: document.getElementById('projName').value,
                     client: document.getElementById('clientSelect').value,
@@ -161,7 +162,6 @@
                     status: 'pending',
                     createdAt: Date.now(),
                     batchId: batchId,
-                    // 预设费用对象化
                     fRate: { 
                         val: Number(document.getElementById('fRate').value) || 0, 
                         unit: document.getElementById('fRateUnit').value 
@@ -176,7 +176,7 @@
                     },
                     transit: { 
                         val: Number(document.getElementById('fTransit').value) || 0, 
-                        unit: 'USD' 
+                        unit: document.getElementById('fTransitUnit').value 
                     }
                 });
             });
@@ -186,7 +186,6 @@
             location.reload();
         });
 
-        // 视图切换逻辑保持不变
         window.showView = (type, el) => {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             el.classList.add('active');
@@ -207,10 +206,9 @@
                           (status === 'dispatched' ? `<button class="btn-main" style="width:auto;margin:0;padding:8px 15px;background:#28a745" onclick="window.finishTask('${id}')">确认完结</button>` : '<span>已归档</span>')}
                     </div>`;
                 });
-            });
+            }, { onlyOnce: true });
         }
 
-        // 状态计数器
         onValue(ref(db, 'tms/dispatch'), s => {
             const data = Object.values(s.val()||{});
             document.getElementById('tab-pending').innerText = `待发车 (${data.filter(i=>i.status==='pending').length})`;

@@ -8,8 +8,16 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <style>
-    :root { --primary: #1e63d8; --bg: #f0f4f8; --card: #ffffff; --text: #334155; --success: #2ecc71; --gray: #95a5a6; --warning: #f39c12; --danger: #e74c3c; }
-    body { margin:0; font-family:'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); }
+    :root { --primary: #1e63d8; --bg: #f0f4f8; --card: rgba(255, 255, 255, 0.9); --text: #334155; --success: #2ecc71; --gray: #95a5a6; --warning: #f39c12; --danger: #e74c3c; }
+    
+    /* 修改点：更换背景图片并优化显示效果 */
+    body { 
+        margin:0; 
+        font-family:'Segoe UI', system-ui, sans-serif; 
+        background: url('assets/images/abel.jpg') no-repeat center center fixed; 
+        background-size: cover;
+        color: var(--text); 
+    }
     
     .nav-header { background: var(--primary); color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
     .btn-nav { background: rgba(255,255,255,0.2); border: none; color: white; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: bold; text-decoration: none; font-size: 13px; }
@@ -18,10 +26,10 @@
 
     /* 模块样式 */
     .menu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1.5rem; }
-    .menu-card { background: var(--card); padding: 2rem 1rem; border-radius: 16px; text-align: center; cursor: pointer; transition: 0.3s; border: 1px solid #e2e8f0; display: flex; flex-direction: column; align-items: center; gap: 0.8rem; }
+    .menu-card { background: var(--card); padding: 2rem 1rem; border-radius: 16px; text-align: center; cursor: pointer; transition: 0.3s; border: 1px solid #e2e8f0; display: flex; flex-direction: column; align-items: center; gap: 0.8rem; backdrop-filter: blur(10px); }
     .menu-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.08); border-color: var(--primary); }
 
-    .module-content { display: none; background: var(--card); border-radius: 16px; padding: 2rem; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+    .module-content { display: none; background: var(--card); border-radius: 16px; padding: 2rem; box-shadow: 0 4px 15px rgba(0,0,0,0.05); backdrop-filter: blur(10px); }
     .active-module { display: block; animation: slideIn 0.3s ease-out; }
 
     /* 表单 UI */
@@ -50,7 +58,7 @@
     .truck-card.normal { background: var(--success); }
     .truck-card.repair { background: var(--gray); }
 
-    /* PDF 隐藏模板 - 重新设计 A4 布局 */
+    /* PDF 模板保持隐藏 */
     #pdfTemplate { 
         position: absolute; left: -9999px; top: -9999px; 
         width: 210mm; min-height: 297mm; 
@@ -66,8 +74,6 @@
     .pdf-sig { border-top: 1px solid #000; text-align: center; padding-top: 10px; font-size: 12px; }
 
     @keyframes slideIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
-
-    /* 优化UI：添加表格排序和刷新按钮 */
     .table-header { cursor: pointer; }
     .refresh-btn { background: var(--primary); color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; margin-bottom: 10px; }
 </style>
@@ -79,7 +85,6 @@
         <h1 style="margin:0; font-size: 26px;">Vehicle Check-in Form / 入厂单</h1>
         <p style="margin:5px 0; font-size: 12px; color: #666;">Maintenance Management System (TMS)</p>
     </div>
-
     <div class="pdf-info-grid">
         <div class="pdf-info-item"><b>Plate No / 车牌号</b><span id="p_plate" style="font-size:16px; font-weight:bold;"></span></div>
         <div class="pdf-info-item"><b>Driver Name / 司机</b><span id="p_driver"></span></div>
@@ -88,13 +93,10 @@
         <div class="pdf-info-item"><b>Date / 进场日期</b><span id="p_date"></span></div>
         <div class="pdf-info-item"><b>Mechanic / 主修机修</b><span id="p_tech"></span></div>
     </div>
-
     <div class="pdf-section-title">Fault Description / 故障描述 (Driver's Report)</div>
     <div class="pdf-section-box" id="p_report"></div>
-
     <div class="pdf-section-title">Parts Required / 配件需求清单</div>
     <div class="pdf-section-box" id="p_parts"></div>
-
     <div class="pdf-footer">
         <div class="pdf-sig">Mechanic Signature / 技师签名</div>
         <div class="pdf-sig">Authorized Approval / 经理审批</div>
@@ -247,16 +249,12 @@ function fillSelects() {
     }
 }
 
-// PDF 生成逻辑 (核心修复)
 window.printCheckInPDF = async () => {
     const p = document.getElementById('m1_select').selectedOptions[0]?.text;
     if(!p || p.includes("选择")) return alert("请先选择车辆！");
-
     const btn = document.querySelector('.btn-pdf');
     btn.innerText = "Generating...";
     btn.disabled = true;
-
-    // 填充模板数据
     document.getElementById('p_plate').innerText = p;
     document.getElementById('p_driver').innerText = document.getElementById('m1_driver').value || "-";
     document.getElementById('p_odo').innerText = document.getElementById('m1_odo').value || "0";
@@ -265,10 +263,8 @@ window.printCheckInPDF = async () => {
     document.getElementById('p_tech').innerText = document.getElementById('m1_tech').value || "Not Assigned";
     document.getElementById('p_report').innerText = document.getElementById('m1_report').value || "N/A";
     document.getElementById('p_parts').innerText = document.getElementById('m1_parts').value || "N/A";
-
     const target = document.getElementById('pdfTemplate');
-    target.style.left = "0"; // 临时拉回视口
-
+    target.style.left = "0"; 
     try {
         const canvas = await html2canvas(target, { scale: 2 });
         const imgData = canvas.toDataURL('image/jpeg', 1.0);
@@ -285,7 +281,6 @@ window.printCheckInPDF = async () => {
     }
 };
 
-// 保留的原有逻辑模块...
 window.doCheckIn = async () => {
     const key = document.getElementById('m1_select').value;
     const dr = document.getElementById('m1_driver').value;
@@ -293,7 +288,6 @@ window.doCheckIn = async () => {
     const rep = document.getElementById('m1_report').value;
     const pts = document.getElementById('m1_parts').value;
     if(!key || !dr || !km || !rep || !pts) return alert("请填写带*必填项！");
-
     await update(ref(db, `tms/vehicles/${key}`), {
         maintaining: true, startTime: Date.now(), km: parseFloat(km),
         driver: dr, serviceType: document.getElementById('m1_type').value,
@@ -318,7 +312,6 @@ function renderWarnings() {
         else if(diff < 1000) { cls = "bg-orange"; txt = "准备保养 / DUE"; }
         rows.push({ plate: v.head||'??', lastKm, curKm, nextKm, cls, txt });
     }
-    // 默认按状态严重度排序：red > orange > green
     rows.sort((a, b) => {
         const order = { 'bg-red': 2, 'bg-orange': 1, 'bg-green': 0 };
         return order[b.cls] - order[a.cls];
@@ -349,6 +342,7 @@ window.doCheckOut = async () => {
     showMenu();
 };
 
+// 修改点：修改 renderPartsLog 使记录从最新到最旧显示
 async function renderPartsLog() {
     const sDate = document.getElementById('searchDate').value;
     const sPlate = document.getElementById('searchPlate').value.toLowerCase();
@@ -356,12 +350,17 @@ async function renderPartsLog() {
     const data = snap.val();
     const body = document.getElementById('partsLogBody');
     body.innerHTML = "";
-    for(let k in data) {
-        const item = data[k];
-        if(sDate && item.date !== sDate) continue;
-        if(sPlate && !item.plate.toLowerCase().includes(sPlate)) continue;
+    
+    // 将对象转为数组并反转，确保最新的记录排在前面
+    let logs = [];
+    for(let k in data) { logs.push(data[k]); }
+    logs.reverse(); 
+
+    logs.forEach(item => {
+        if(sDate && item.date !== sDate) return;
+        if(sPlate && !item.plate.toLowerCase().includes(sPlate)) return;
         body.innerHTML += `<tr><td>${item.date}</td><td>${item.plate}</td><td>${item.mechanic}</td><td>${item.duration}h</td><td>${item.parts}</td></tr>`;
-    }
+    });
 }
 
 function startLiveBoard() {
@@ -379,14 +378,13 @@ function startLiveBoard() {
     boardTimer = setInterval(draw, 10000);
 }
 
-// 添加表格排序功能
 window.sortTable = (colIndex) => {
     const table = document.getElementById('warningTable');
-    const rows = Array.from(table.rows).slice(1); // 跳过表头
+    const rows = Array.from(table.rows).slice(1);
     rows.sort((a, b) => {
         let valA = a.cells[colIndex].innerText;
         let valB = b.cells[colIndex].innerText;
-        if (colIndex === 4) { // 状态列，按严重度排序
+        if (colIndex === 4) { 
             const order = { '超期 / OVERDUE': 2, '准备保养 / DUE': 1, '良好 / OK': 0 };
             return order[valB] - order[valA];
         } else {
