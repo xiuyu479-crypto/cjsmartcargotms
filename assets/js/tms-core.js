@@ -320,7 +320,64 @@
     };
 
     /* ------------------------------------------------------------------
-       4. 审计日志
+       4. 车辆位置
+       ------------------------------------------------------------------
+       数据：tms/orders/{id}/location = { lat, lng, acc, at, speed, heading, by }
+       司机端 watchPosition 上报，动态监控端按 at 显示"位置 + 更新时间"。
+    */
+    var geo = TMS.geo = {
+        // 浏览器是否支持定位（file:// 或 http 非 localhost 会被浏览器禁用）
+        available: function () {
+            return !!(global.navigator && global.navigator.geolocation) && global.isSecureContext !== false;
+        },
+
+        // 统一成 { lat, lng, acc, at, speed, heading, by }；无效返回 null
+        parse: function (raw) {
+            if (!raw) return null;
+            var lat = Number(raw.lat !== undefined ? raw.lat : raw.latitude);
+            var lng = Number(raw.lng !== undefined ? raw.lng : raw.longitude);
+            if (!isFinite(lat) || !isFinite(lng) || (lat === 0 && lng === 0)) return null;
+            return {
+                lat: lat,
+                lng: lng,
+                acc: Number(raw.acc || raw.accuracy) || 0,
+                at: Number(raw.at || raw.updatedAt) || 0,
+                speed: raw.speed === undefined || raw.speed === null ? null : Number(raw.speed),
+                heading: raw.heading === undefined || raw.heading === null ? null : Number(raw.heading),
+                by: raw.by || ''
+            };
+        },
+
+        fmt: function (lat, lng, digits) {
+            var d = digits === undefined ? 5 : digits;
+            return Number(lat).toFixed(d) + ', ' + Number(lng).toFixed(d);
+        },
+
+        mapUrl: function (lat, lng) {
+            return 'https://www.google.com/maps/search/?api=1&query=' + Number(lat) + ',' + Number(lng);
+        },
+
+        // 距今多少分钟（向下取整），无效时间返回 null
+        minutesAgo: function (ts) {
+            var t = Number(ts);
+            if (!t) return null;
+            var m = Math.floor((Date.now() - t) / 60000);
+            return m < 0 ? 0 : m;
+        },
+
+        // 两点距离（米），用于"移动超过阈值才上报"，避免静止时刷库
+        distance: function (a, b) {
+            if (!a || !b) return Infinity;
+            var R = 6371000, rad = Math.PI / 180;
+            var dLat = (b.lat - a.lat) * rad, dLng = (b.lng - a.lng) * rad;
+            var s = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+            return 2 * R * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
+        }
+    };
+
+    /* ------------------------------------------------------------------
+       5. 审计日志
        ------------------------------------------------------------------
        数据：tms/audit_logs/{pushKey} = { at, by, role, action, target, detail, before, after }
        页面负责注册写库函数（各页 SDK 不同）：

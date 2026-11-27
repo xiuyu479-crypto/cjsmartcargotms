@@ -195,6 +195,18 @@
         .m-submit-red { background: var(--danger); color: #fff; }
 
         .finish-screen { display: none; text-align: center; padding: 60px 20px; }
+
+        /* 位置共享状态条 */
+        .loc-bar {
+            display: none; align-items: center; gap: 8px;
+            margin: 0 0 12px; padding: 10px 14px; border-radius: 12px;
+            background: #eef6ff; color: #1f5f9e; font-size: 13px; font-weight: 600;
+            border: 1px solid #d6e8fb;
+        }
+        .loc-bar.on { background: #eaf7ee; color: #1e6b39; border-color: #cfe9d8; }
+        .loc-bar.warn { background: #fff7e6; color: #8a5a00; border-color: #ffe2b0; }
+        .loc-bar.denied { background: #fdeeee; color: #a12c2c; border-color: #f6d5d5; }
+        .loc-bar .loc-link { margin-left: auto; color: inherit; text-decoration: underline; font-weight: 700; }
         
         #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
                    background: white; display: flex; flex-direction: column; align-items: center; 
@@ -214,6 +226,11 @@
 <div id="app" style="display:none;" class="container">
     <div class="header">
         <div class="header-title">DRIVER REPORT SYSTEM</div>
+    </div>
+
+    <div id="locBar" class="loc-bar">
+        <i class="bi bi-geo-alt"></i>
+        <span id="locText">Location sharing is off</span>
     </div>
 
     <div class="card">
@@ -355,7 +372,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-import { getDatabase, ref, onValue, update, push, serverTimestamp, set, remove } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+import { getDatabase, ref, onValue, update, push, serverTimestamp, set, remove, runTransaction } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDEbePpsrXwD8Okqa93UOGUFE37c8SFHS0",
@@ -406,6 +423,7 @@ if (!orderId) {
     onValue(ref(db, `tms/orders/${orderId}`), (snapshot) => {
         const data = snapshot.val();
         if (!data) {
+            stopLocationShare(); // 订单已归档/删除，停止上报，避免产生孤儿位置节点
             document.getElementById('loading').innerHTML = "ORDER NOT FOUND";
             return;
         }
@@ -432,14 +450,184 @@ function render(data, type) {
     currentStep = data.statusStep || 1;
     
     if (currentStep > currentFlow.length) {
+        stopLocationShare();
         document.getElementById('actionArea').style.display = 'none';
         document.getElementById('finishArea').style.display = 'block';
     } else {
+        startLocationShare(); // 幂等：只在第一次进入时启动
         const s = currentFlow[currentStep-1];
         document.getElementById('statusLabel').innerText = s.label; 
         document.getElementById('nextStatusLabel').innerText = "SLIDE: " + s.next;
     }
 }
+
+/* ============================================================
+   位置共享：司机打开本页即申请定位权限，页面运行期间持续上报
+   - 只在有更新位置时写入（事务比对 at，避免旧位置覆盖新位置）
+   - 60 秒或移动超过 300 米才上报，省流量也省电
+   ============================================================ */
+const LOC_MIN_INTERVAL = 60 * 1000;
+const LOC_MIN_MOVE = 300;
+
+let locStarted = false;
+let locWatchId = null;
+let locLastFix = null;
+let locLastSentAt = 0;
+
+function setLocBar(kind, text) {
+    const bar = document.getElementById('locBar');
+    const txt = document.getElementById('locText');
+    if (!bar || !txt) return;
+    bar.className = 'loc-bar' + (kind ? ' ' + kind : '');
+    bar.style.display = 'flex';
+    // 被拒绝/异常时点一下状态条可重新申请（iOS 需要用户手势才会弹权限框）
+    const retryable = kind === 'denied' || kind === 'warn';
+    txt.textContent = text + (retryable ? ' · Tap to retry' : '');
+    bar.style.cursor = retryable ? 'pointer' : 'default';
+    bar.onclick = retryable ? retryLocation : null;
+}
+
+function retryLocation() {
+    if (!navigator.geolocation) return;
+    setLocBar('', 'Requesting location permission...');
+    navigator.geolocation.getCurrentPosition(onLocFix, onLocError, {
+        enableHighAccuracy: true, timeout: 20000, maximumAge: 0
+    });
+    if (locWatchId === null) {
+        try {
+            locWatchId = navigator.geolocation.watchPosition(onLocFix, onLocError, {
+                enableHighAccuracy: true, timeout: 25000, maximumAge: 20000
+            });
+        } catch (e) { /* ignore */ }
+    }
+}
+
+function startLocationShare() {
+    if (locStarted) return;
+    locStarted = true;
+
+    if (!navigator.geolocation) {
+        setLocBar('warn', 'This device does not support location.');
+        return;
+    }
+    if (!window.isSecureContext) {
+        setLocBar('warn', 'Location needs HTTPS. Open this link over https.');
+        return;
+    }
+
+    setLocBar('', 'Requesting location permission...');
+    try {
+        locWatchId = navigator.geolocation.watchPosition(onLocFix, onLocError, {
+            enableHighAccuracy: true,
+            timeout: 25000,
+            maximumAge: 20000
+        });
+    } catch (e) {
+        setLocBar('warn', 'Cannot start location service.');
+    }
+}
+
+function stopLocationShare() {
+    if (locWatchId !== null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(locWatchId);
+    }
+    locWatchId = null;
+    locStarted = false;
+}
+
+function onLocFix(pos) {
+    const c = pos.coords || {};
+    const p = {
+        lat: Number(c.latitude),
+        lng: Number(c.longitude),
+        acc: Number(c.accuracy) || 0,
+        at: Date.now(),
+        speed: isFinite(c.speed) ? Number(c.speed) : null,
+        heading: isFinite(c.heading) ? Number(c.heading) : null
+    };
+    if (!isFinite(p.lat) || !isFinite(p.lng)) return;
+
+    // 节流：够时间 或 挪得够远才发
+    const moved = TMS.geo.distance(locLastFix, p);
+    locLastFix = p; // 保留完整定位（含 at），滑动确认时可直接复用
+    if (locLastSentAt && (p.at - locLastSentAt) < LOC_MIN_INTERVAL && moved < LOC_MIN_MOVE) return;
+
+    uploadLocation(p);
+}
+
+/* 滑动确认时取当前位置：优先复用 2 分钟内的实时定位，否则现取一次，最多等 3.5 秒
+   取不到就返回 null（不阻塞状态更新） */
+function getFixForRecord() {
+    const fresh = locLastFix && locLastFix.at && (Date.now() - locLastFix.at < 120000);
+    if (fresh) return Promise.resolve({
+        lat: locLastFix.lat, lng: locLastFix.lng,
+        acc: Math.round(locLastFix.acc || 0), at: locLastFix.at
+    });
+    return new Promise(resolve => {
+        if (!navigator.geolocation || !window.isSecureContext) { resolve(null); return; }
+        let done = false;
+        const finish = v => { if (!done) { done = true; resolve(v); } };
+        const timer = setTimeout(() => finish(null), 3500);
+        navigator.geolocation.getCurrentPosition(
+            pos => {
+                clearTimeout(timer);
+                const c = pos.coords || {};
+                const lat = Number(c.latitude), lng = Number(c.longitude);
+                if (!isFinite(lat) || !isFinite(lng)) { finish(null); return; }
+                const fix = { lat: lat, lng: lng, acc: Math.round(Number(c.accuracy) || 0), at: Date.now() };
+                locLastFix = Object.assign({}, fix, { speed: null, heading: null });
+                finish(fix);
+            },
+            () => { clearTimeout(timer); finish(null); },
+            { enableHighAccuracy: true, timeout: 3000, maximumAge: 60000 }
+        );
+    });
+}
+
+function onLocError(err) {
+    const code = err && err.code;
+    if (code === 1) {
+        setLocBar('denied', 'Location blocked. Allow location for this site in browser settings.');
+    } else if (code === 3) {
+        setLocBar('warn', 'Locating timed out, retrying...');
+    } else {
+        setLocBar('warn', 'Location unavailable, retrying...');
+    }
+}
+
+async function uploadLocation(p) {
+    const at = p.at;
+    try {
+        const res = await runTransaction(ref(db, `tms/orders/${orderId}/location`), (cur) => {
+            const prevAt = cur ? Number(cur.at || 0) : 0;
+            if (prevAt && prevAt >= at) return; // 云端已有更新的位置，放弃本次
+            return {
+                lat: p.lat,
+                lng: p.lng,
+                acc: Math.round(p.acc),
+                at: at,
+                speed: p.speed,
+                heading: p.heading,
+                by: (currentOrderData && currentOrderData.driver) || 'driver'
+            };
+        });
+        if (res && res.committed) {
+            locLastSentAt = at;
+            setLocBar('on', 'Location shared · ' + TMS.util.time(at));
+        }
+    } catch (e) {
+        setLocBar('warn', 'Location upload failed, will retry...');
+    }
+}
+
+// 从后台切回前台时补一次定位
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || !locStarted) return;
+    navigator.geolocation.getCurrentPosition(onLocFix, () => {}, {
+        enableHighAccuracy: true, timeout: 15000, maximumAge: 30000
+    });
+});
+
 
 // Timer Loop
 setInterval(() => {
@@ -574,11 +762,16 @@ async function confirmStep() {
     const ts = currentOrderData.statusTimestamps || {};
     const dur = currentOrderData.durations || {};
     const currentStateObj = currentFlow[currentStep-1];
-    
+
+    // 滑动确认时读取当前位置：写入时效记录，动态监控里显示"时间 + 地点"
+    const loc = await getFixForRecord();
+
     const key = currentStateObj.key;
     if (ts[key] && ts[key].start) {
         dur[key] = (dur[key] || 0) + (now - ts[key].start);
         ts[key].end = now;
+        ts[key].endedAt = now;
+        if (loc) { ts[key].endLat = loc.lat; ts[key].endLng = loc.lng; }
         delete ts[key].start;
     }
 
@@ -591,7 +784,13 @@ async function confirmStep() {
     
     if (target <= currentFlow.length) {
         const nextStateObj = currentFlow[target-1];
-        ts[nextStateObj.key] = { start: now };
+        ts[nextStateObj.key] = { start: now, startedAt: now };
+        if (loc) {
+            ts[nextStateObj.key].lat = loc.lat;
+            ts[nextStateObj.key].lng = loc.lng;
+            ts[nextStateObj.key].acc = loc.acc;
+            ts[nextStateObj.key].locAt = loc.at;
+        }
         updatePayload.status = nextStateObj.label; 
     } else {
         updatePayload.status = "Completed";
@@ -613,10 +812,12 @@ async function confirmStep() {
     } catch (e) { alert("Error updating status."); }
 }
 
-const start = (e) => { isDragging = true; startX = (e.clientX || e.touches[0].clientX); handle.style.transition = 'none'; bg.style.transition = 'none'; };
+// 兼容鼠标与触摸：触摸事件没有 clientX 时读 touches[0]
+const evX = (e) => (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
+const start = (e) => { isDragging = true; startX = evX(e); handle.style.transition = 'none'; bg.style.transition = 'none'; };
 const move = (e) => {
     if (!isDragging) return;
-    const x = (e.clientX || e.touches[0].clientX) - startX;
+    const x = evX(e) - startX;
     const max = wrapper.offsetWidth - handle.offsetWidth;
     const pos = Math.max(0, Math.min(x, max));
     handle.style.left = pos + 'px';
