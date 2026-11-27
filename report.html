@@ -202,6 +202,7 @@
     </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 <link rel="stylesheet" href="assets/css/theme.css">
+<script src="assets/js/tms-core.js"></script>
 </head>
 <body>
 
@@ -282,7 +283,26 @@
 <div class="modal" id="issueModal">
     <div class="modal-content">
         <div class="modal-title" style="color:var(--danger)">REPORT ISSUE</div>
+
+        <div class="form-row">
+            <label class="form-label">Issue Type (异常类型)</label>
+            <select class="modal-input" id="issueType">
+                <option value="breakdown">车辆故障 / Breakdown</option>
+                <option value="customs">边检海关滞留 / Customs Delay</option>
+                <option value="accident">交通事故 / Accident</option>
+                <option value="cargo">货物损坏 / Cargo Damage</option>
+                <option value="road">道路封闭绕行 / Road Blocked</option>
+                <option value="fine">罚款 / Fine</option>
+                <option value="other">其他 / Other</option>
+            </select>
+        </div>
+
         <textarea class="modal-input" id="issueInput" placeholder="Describe the problem (e.g., breakdown, border delay, accident)..."></textarea>
+
+        <div style="font-size:12px;color:#888;margin-top:8px">
+            说明：如需附图请在 WhatsApp 群内发送，系统不再上传图片以节省流量。
+        </div>
+
         <div class="modal-actions">
             <button class="m-btn m-cancel" id="closeIssueModal">CANCEL</button>
             <button class="m-btn m-submit-red" id="submitIssue">SUBMIT</button>
@@ -441,17 +461,44 @@ setInterval(() => {
 
 // --- Issue Reporting Logic ---
 const issueModal = document.getElementById('issueModal');
-document.getElementById('openIssueModal').onclick = () => { issueModal.style.display = 'flex'; };
+const ISSUE_TYPES = {
+    breakdown: { zh: '车辆故障', en: 'Breakdown' },
+    customs:   { zh: '边检/海关滞留', en: 'Customs Delay' },
+    accident:  { zh: '交通事故', en: 'Accident' },
+    cargo:     { zh: '货物损坏', en: 'Cargo Damage' },
+    road:      { zh: '道路封闭/绕行', en: 'Road Blocked' },
+    fine:      { zh: '罚款', en: 'Fine' },
+    other:     { zh: '其他', en: 'Other' }
+};
+
+// 说明：按业务要求不再上传/暂存异常照片（图片走 WhatsApp），此处只记录结构化异常信息
+document.getElementById('openIssueModal').onclick = () => {
+    issueModal.style.display = 'flex';
+};
 document.getElementById('closeIssueModal').onclick = () => { issueModal.style.display = 'none'; };
+
 document.getElementById('submitIssue').onclick = async () => {
     const text = document.getElementById('issueInput').value.trim();
-    if(!text) return;
+    if (!text) return;
+
+    const typeKey = document.getElementById('issueType').value || 'other';
+    const t = ISSUE_TYPES[typeKey] || ISSUE_TYPES.other;
+    const btn = document.getElementById('submitIssue');
+
+    btn.disabled = true;
+    btn.textContent = 'SUBMITTING...';
+
     try {
-        const currentIssues = currentOrderData.issues || [];
+        const raw = currentOrderData.issues;
+        const currentIssues = Array.isArray(raw) ? raw.slice() : (raw ? Object.values(raw) : []);
         currentIssues.push({
+            type: typeKey,
+            typeZh: t.zh,
+            typeEn: t.en,
             message: text,
             timestamp: Date.now(),
-            dateStr: new Date().toLocaleString()
+            dateStr: new Date().toLocaleString(),
+            reportedBy: currentOrderData.driver || ''
         });
         await update(ref(db, `tms/orders/${orderId}`), {
             issues: currentIssues,
@@ -460,7 +507,12 @@ document.getElementById('submitIssue').onclick = async () => {
         document.getElementById('issueInput').value = "";
         issueModal.style.display = 'none';
         alert("Report submitted successfully.");
-    } catch (e) { alert("Submit failed."); }
+    } catch (e) {
+        alert("Submit failed.");
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'SUBMIT';
+    }
 };
 
 // --- Expense Reporting Logic (New) ---

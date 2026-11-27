@@ -1,0 +1,7 @@
+# 依赖与本地测试产物
+node_modules/
+.tmp_check/
+
+# 系统文件
+.DS_Store
+Thumbs.db

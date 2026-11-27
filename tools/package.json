@@ -1,0 +1,23 @@
+{
+  "name": "cjsmartcargotms",
+  "version": "1.0.0",
+  "description": "一坨答辩，自己专用，专门喂屎，快走开",
+  "main": "tools-check.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xiuyu479-crypto/cjsmartcargotms.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/xiuyu479-crypto/cjsmartcargotms/issues"
+  },
+  "homepage": "https://github.com/xiuyu479-crypto/cjsmartcargotms#readme",
+  "dependencies": {
+    "puppeteer-core": "^22.15.0"
+  }
+}

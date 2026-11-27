@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>司机结算单 - TMS</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="stylesheet" href="assets/css/theme.css">
+<link rel="stylesheet" href="assets/css/report.css">
+<script src="assets/js/tms-core.js"></script>
+<script>TMS.session.requireRole(['admin']);</script>
+<style>
+    .st-table input, .st-table select { width: 100%; padding: 6px; border: 1px solid var(--c-border-strong); border-radius: 6px; font-size: 12px; }
+    .st-total { display:flex; gap:24px; flex-wrap:wrap; justify-content:flex-end; padding:14px 4px 0; font-size:14px; }
+    .st-total b { font-size:18px; }
+    @media print {
+        .rp-bar, .rp-card.no-print, .rp-filters, .rp-btn { display:none !important; }
+        body { background:#fff; }
+        .rp-wrap { margin:0; max-width:none; }
+        .rp-table-wrap { border:none; box-shadow:none; }
+    }
+</style>
+</head>
+<body>
+
+<div class="rp-bar">
+    <h1><i class="bi bi-wallet2"></i> 司机结算单 <span class="sub">Trip Money + Bonus + 津贴 − 预支/扣款</span></h1>
+    <div class="spacer"></div>
+    <button class="rp-btn ghost" onclick="window.print()"><i class="bi bi-printer"></i> 打印</button>
+    <button class="rp-btn ghost" onclick="exportCsv()"><i class="bi bi-download"></i> 导出</button>
+    <button class="rp-btn ghost" onclick="location.href='index.html'"><i class="bi bi-arrow-left"></i> 返回主页</button>
+</div>
+
+<div class="rp-wrap">
+    <div class="rp-card no-print">
+        <div class="rp-filters">
+            <div><label>司机</label><select id="fDriver" style="min-width:180px"><option value="">全部司机</option></select></div>
+            <div><label>开始日期</label><input type="date" id="fFrom"></div>
+            <div><label>结束日期</label><input type="date" id="fTo"></div>
+            <div><label>汇率（结算折算）</label><input type="number" step="0.01" id="fRate" style="width:110px"></div>
+            <button class="rp-btn" onclick="renderSettlement()"><i class="bi bi-calculator"></i> 生成结算</button>
+            <button class="rp-btn ghost" onclick="quick('all')">全部</button>
+            <button class="rp-btn ghost" onclick="quick('month')">本月</button>
+        </div>
+        <div class="rp-note" style="margin:12px 0 0">
+            收入项取自已归档订单（Trip Money / Bonus / 司机津贴，按订单完成时汇率折算）；扣款项来自下方"预支/扣款"记录。
+        </div>
+    </div>
+
+    <div class="rp-kpis">
+        <div class="rp-kpi"><div class="k">应得合计</div><div class="v money" id="kEarn">0</div><div class="t">Trip + Bonus + 津贴</div></div>
+        <div class="rp-kpi"><div class="k">扣款合计</div><div class="v neg" id="kDeduct">0</div><div class="t">预支 / 罚款 / 其他</div></div>
+        <div class="rp-kpi"><div class="k">本期应付</div><div class="v pos" id="kNet">0</div><div class="t" id="kNetT">USD</div></div>
+        <div class="rp-kpi"><div class="k">订单数</div><div class="v" id="kOrders">0</div><div class="t" id="kRange">-</div></div>
+    </div>
+
+    <div class="rp-card">
+        <h2><i class="bi bi-list-check"></i> 收入明细（已完成订单）</h2>
+        <div class="rp-table-wrap" style="max-height:44vh">
+            <table class="rp-table st-table">
+                <thead>
+                    <tr>
+                        <th>完成日期</th><th>订单号</th><th>司机</th><th>车牌</th><th>线路</th>
+                        <th class="num">Trip Money</th><th class="num">Bonus</th><th class="num">津贴</th>
+                        <th class="num">合计(USD)</th>
+                    </tr>
+                </thead>
+                <tbody id="tbodyEarn"><tr><td colspan="9" class="rp-empty">加载中...</td></tr></tbody>
+            </table>
+        </div>
+        <div class="st-total">
+            <div>应得：<b id="tEarn">$0.00</b></div>
+        </div>
+    </div>
+
+    <div class="rp-card">
+        <h2><i class="bi bi-dash-circle"></i> 预支 / 扣款 <span class="sub" style="font-weight:400;color:#888">（手动登记）</span></h2>
+        <div class="rp-filters no-print" style="margin-bottom:12px">
+            <div><label>司机</label><input type="text" id="advDriver" placeholder="司机姓名" style="min-width:150px"></div>
+            <div><label>类型</label>
+                <select id="advType">
+                    <option value="advance">预支</option>
+                    <option value="fine">罚款</option>
+                    <option value="deduction">其他扣款</option>
+                </select>
+            </div>
+            <div><label>金额</label><input type="number" id="advAmount" step="0.01" style="width:120px"></div>
+            <div><label>币种</label><select id="advCurrency"><option>ZMW</option><option>USD</option></select></div>
+            <div><label>日期</label><input type="date" id="advDate"></div>
+            <div><label>备注</label><input type="text" id="advNote" placeholder="可选" style="min-width:150px"></div>
+            <button class="rp-btn" onclick="addAdvance()"><i class="bi bi-plus-lg"></i> 登记</button>
+        </div>
+        <div class="rp-table-wrap" style="max-height:32vh">
+            <table class="rp-table st-table">
+                <thead><tr><th>日期</th><th>司机</th><th>类型</th><th class="num">金额</th><th class="num">折USD</th><th>备注</th><th>登记人</th><th></th></tr></thead>
+                <tbody id="tbodyAdv"><tr><td colspan="8" class="rp-empty">加载中...</td></tr></tbody>
+            </table>
+        </div>
+        <div class="st-total">
+            <div>扣款：<b id="tDeduct">$0.00</b></div>
+            <div>本期应付：<b id="tNet" style="color:var(--c-danger)">$0.00</b></div>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-app.js";
+import { getDatabase, ref, onValue, push, remove } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-database.js";
+
+const firebaseConfig = {
+    apiKey: "AIzaSyDEbePpsrXwD8Okqa93UOGUFE37c8SFHS0",
+    authDomain: "cjsmartcargo-datebase.firebaseapp.com",
+    databaseURL: "https://cjsmartcargo-datebase-default-rtdb.firebaseio.com",
+    projectId: "cjsmartcargo-datebase",
+    storageBucket: "cjsmartcargo-datebase.firebasestorage.app"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const esc = TMS.util.esc;
+TMS.audit.bind(p => push(ref(db, 'tms/audit_logs'), p));
+
+let ORDERS = {};
+let DISPATCH = {};
+let ADVANCES = {};
+let RATES = [];
+
+onValue(ref(db, 'tms/completed_orders'), s => { ORDERS = s.val() || {}; refresh(); });
+onValue(ref(db, 'tms/dispatch'), s => { DISPATCH = s.val() || {}; refresh(); });
+onValue(ref(db, 'tms/driver_advances'), s => { ADVANCES = s.val() || {}; refresh(); });
+onValue(ref(db, 'tms/fx/rates'), s => { RATES = TMS.fx.normalize(s.val()); refresh(); });
+
+function rateOf(ts) { return RATES.length ? TMS.fx.rateAt(RATES, ts) : (Number(document.getElementById('fRate').value) || TMS.fx.DEFAULT); }
+
+function moneyVal(obj, fallback, ts, defaultUnit) {
+    const o = obj || {};
+    const raw = Number(o.val !== undefined ? o.val : fallback) || 0;
+    const unit = (o.unit || defaultUnit || 'ZMW').toUpperCase();
+    return TMS.fx.toUSD(raw, unit, rateOf(ts));
+}
+
+function rebuildDrivers() {
+    const set = new Set();
+    Object.values(ORDERS).forEach(o => { if (o.driver) set.add(o.driver); });
+    Object.values(ADVANCES).forEach(a => { if (a.driver) set.add(a.driver); });
+
+    const sel = document.getElementById('fDriver');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">全部司机</option>' +
+        Array.from(set).sort().map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('');
+    if (Array.from(set).indexOf(cur) >= 0) sel.value = cur;
+}
+
+/* ---------------- 收入明细 ---------------- */
+function earnRows() {
+    const from = document.getElementById('fFrom').value;
+    const to = document.getElementById('fTo').value;
+    const drv = document.getElementById('fDriver').value;
+
+    return Object.keys(ORDERS).map(id => {
+        const o = ORDERS[id];
+        const ts = Number(o.archivedAt) || Number(o.startTime) || Date.now();
+        const d = DISPATCH[o.relDispatchId] || {};
+        const trip = moneyVal(o.fTrip || d.fTrip, o.tripMoney, ts, 'ZMW');
+        const bonus = moneyVal(o.fBonus || d.fBonus, 0, ts, 'ZMW');
+        const allowRaw = Number(o.allowance) || 0;
+        const allow = allowRaw / rateOf(ts); // 津贴固定 ZMW
+        const total = trip + bonus + allow;
+        return {
+            id, o, ts,
+            day: TMS.util.ymd(ts),
+            orderId: o.orderId || id,
+            driver: o.driver || '未填写',
+            plate: o.tractor || '',
+            route: o.route || [o.pickupAddr, o.dropoffAddr].filter(Boolean).join(' → ') || '-',
+            trip, bonus, allow, total
+        };
+    }).filter(r => {
+        if (drv && r.driver !== drv) return false;
+        if (from && r.day < from) return false;
+        if (to && r.day > to) return false;
+        return true;
+    }).sort((a, b) => b.ts - a.ts);
+}
+
+/* ---------------- 扣款 ---------------- */
+function advRows() {
+    const from = document.getElementById('fFrom').value;
+    const to = document.getElementById('fTo').value;
+    const drv = document.getElementById('fDriver').value;
+    return Object.keys(ADVANCES).map(k => {
+        const a = ADVANCES[k];
+        const day = a.date || TMS.util.ymd(a.at);
+        const r = Number(a.rate) || rateOf(a.at);
+        return Object.assign({ _key: k }, a, {
+            day, usd: TMS.fx.toUSD(a.amount, a.currency, r)
+        });
+    }).filter(a => {
+        if (drv && a.driver !== drv) return false;
+        if (from && a.day < from) return false;
+        if (to && a.day > to) return false;
+        return true;
+    }).sort((a, b) => (b.day || '').localeCompare(a.day || ''));
+}
+
+const ADV_LABEL = { advance: '预支', fine: '罚款', deduction: '其他扣款' };
+
+function refresh() {
+    rebuildDrivers();
+    renderSettlement();
+}
+
+window.renderSettlement = () => {
+    const earn = earnRows();
+    const adv = advRows();
+
+    const tbody = document.getElementById('tbodyEarn');
+    if (!earn.length) {
+        tbody.innerHTML = '<tr><td colspan="9" class="rp-empty">该区间没有已完成订单</td></tr>';
+    } else {
+        tbody.innerHTML = earn.map(r => `
+            <tr>
+                <td>${r.day}</td>
+                <td>${esc(r.orderId)}</td>
+                <td><b>${esc(r.driver)}</b></td>
+                <td>${esc(r.plate)}</td>
+                <td class="muted">${esc(r.route)}</td>
+                <td class="num">${r.trip.toFixed(2)}</td>
+                <td class="num">${r.bonus.toFixed(2)}</td>
+                <td class="num">${r.allow.toFixed(2)}</td>
+                <td class="num"><b>$${r.total.toFixed(2)}</b></td>
+            </tr>`).join('');
+    }
+
+    const tbodyAdv = document.getElementById('tbodyAdv');
+    if (!adv.length) {
+        tbodyAdv.innerHTML = '<tr><td colspan="8" class="rp-empty">暂无预支/扣款记录</td></tr>';
+    } else {
+        tbodyAdv.innerHTML = adv.map(a => `
+            <tr>
+                <td>${esc(a.day || '-')}</td>
+                <td>${esc(a.driver || '-')}</td>
+                <td><span class="rp-tag ${a.type === 'fine' ? 'bad' : 'warn'}">${ADV_LABEL[a.type] || '扣款'}</span></td>
+                <td class="num">${Number(a.amount).toFixed(2)} ${esc(a.currency || 'ZMW')}</td>
+                <td class="num">$${a.usd.toFixed(2)}</td>
+                <td class="muted">${esc(a.note || '-')}</td>
+                <td class="muted">${esc(a.by || '-')}</td>
+                <td><button class="rp-btn ghost small" onclick="delAdvance('${a._key}')">删除</button></td>
+            </tr>`).join('');
+    }
+
+    const earnTotal = earn.reduce((s, r) => s + r.total, 0);
+    const deductTotal = adv.reduce((s, a) => s + a.usd, 0);
+    const net = earnTotal - deductTotal;
+
+    document.getElementById('kEarn').innerText = '$' + earnTotal.toFixed(2);
+    document.getElementById('kDeduct').innerText = '$' + deductTotal.toFixed(2);
+    document.getElementById('kNet').innerText = '$' + net.toFixed(2);
+    document.getElementById('kOrders').innerText = earn.length;
+    document.getElementById('kRange').innerText = (document.getElementById('fFrom').value || '全部') + ' ~ ' + (document.getElementById('fTo').value || '现在');
+    document.getElementById('kNetT').innerText = net < 0 ? '司机倒欠公司' : 'USD';
+
+    document.getElementById('tEarn').innerText = '$' + earnTotal.toFixed(2);
+    document.getElementById('tDeduct').innerText = '$' + deductTotal.toFixed(2);
+    document.getElementById('tNet').innerText = '$' + net.toFixed(2);
+};
+
+/* ---------------- 预支登记 ---------------- */
+window.addAdvance = async () => {
+    const driver = document.getElementById('advDriver').value.trim() || document.getElementById('fDriver').value;
+    const type = document.getElementById('advType').value;
+    const amount = Number(document.getElementById('advAmount').value);
+    const currency = document.getElementById('advCurrency').value;
+    const date = document.getElementById('advDate').value || TMS.util.today();
+    const note = document.getElementById('advNote').value.trim();
+
+    if (!driver) { alert('请填写司机姓名'); return; }
+    if (!amount || amount <= 0) { alert('请填写金额'); return; }
+
+    const at = new Date(date + 'T12:00:00').getTime();
+    const rate = rateOf(at);
+
+    await push(ref(db, 'tms/driver_advances'), {
+        driver, type, amount, currency, date, note,
+        at, rate,
+        usd: TMS.fx.toUSD(amount, currency, rate),
+        by: TMS.session.name() || TMS.session.role(),
+        createdAt: Date.now()
+    });
+
+    TMS.audit.log('司机扣款登记', `${driver}｜${ADV_LABEL[type]}`, `${amount} ${currency}（汇率 ${rate}）${note ? '｜' + note : ''}`);
+
+    document.getElementById('advAmount').value = '';
+    document.getElementById('advNote').value = '';
+};
+
+window.delAdvance = async (key) => {
+    const a = ADVANCES[key];
+    if (!a) return;
+    if (!confirm(`删除这条${ADV_LABEL[a.type] || '扣款'}记录？\n${a.driver} ${a.amount} ${a.currency || 'ZMW'}`)) return;
+    await remove(ref(db, 'tms/driver_advances/' + key));
+    TMS.audit.log('司机扣款删除', `${a.driver}`, `${a.amount} ${a.currency || 'ZMW'}`);
+};
+
+/* ---------------- 导出 ---------------- */
+window.exportCsv = () => {
+    const earn = earnRows();
+    const adv = advRows();
+    let csv = '类型,日期,司机,订单号/备注,车牌/类型,金额USD\n';
+    earn.forEach(r => {
+        csv += [ '应得', r.day, r.driver, r.orderId, r.plate, r.total.toFixed(2) ].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',') + '\n';
+    });
+    adv.forEach(a => {
+        csv += [ '扣款', a.day, a.driver, a.note || '', ADV_LABEL[a.type] || '', (-a.usd).toFixed(2) ].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',') + '\n';
+    });
+    TMS.util.download(`Settlement_${TMS.util.today()}.csv`, csv);
+};
+
+window.quick = (mode) => {
+    const today = new Date();
+    if (mode === 'all') {
+        document.getElementById('fFrom').value = '';
+        document.getElementById('fTo').value = '';
+    } else if (mode === 'month') {
+        const first = new Date(today.getFullYear(), today.getMonth(), 1);
+        document.getElementById('fFrom').value = TMS.util.ymd(first);
+        document.getElementById('fTo').value = TMS.util.ymd(today);
+    }
+    renderSettlement();
+};
+
+/* 初始化 */
+document.getElementById('advDate').value = TMS.util.today();
+document.getElementById('fRate').value = TMS.fx.DEFAULT;
+['fFrom', 'fTo', 'fDriver'].forEach(id => document.getElementById(id).addEventListener('change', renderSettlement));
+quick('all');
+</script>
+</body>
+</html>

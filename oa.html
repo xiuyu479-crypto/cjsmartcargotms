@@ -205,6 +205,7 @@
     </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 <link rel="stylesheet" href="assets/css/theme.css">
+<script src="assets/js/tms-core.js"></script>
 </head>
 <body>
 
@@ -451,7 +452,7 @@
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-    import { getDatabase, ref, push, onValue, update } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+    import { getDatabase, ref, push, onValue, update, get, runTransaction } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyDEbePpsrXwD8Okqa93UOGUFE37c8SFHS0",
@@ -466,13 +467,12 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    const authToken = localStorage.getItem("tms_auth");
-    const userRole = localStorage.getItem("tms_role") || 'viewer';
-    const userName = localStorage.getItem("tms_username") || "未知用户"; // 假设有用户名存储
-
-    if(!authToken) {
-        window.location.href = "password.html?redirect=oa.html";
+    // 会话身份：凭证只在 sessionStorage 中，关浏览器/退出登录后需重新输密码
+    if (!TMS.session.requireLogin()) {
+        throw new Error('not logged in');
     }
+    const userRole = TMS.session.role();
+    const userName = TMS.session.name() || '未知用户';
 
     document.getElementById('currentRoleBadge').innerText = userRole.toUpperCase();
 
@@ -481,6 +481,13 @@
     let pendingActionId = null;
     let pendingActionStatus = null;
     let pendingActionModule = null;
+
+    /* 汇率历史（审批通过时按"申请发生时"的汇率折算并快照） */
+    let RATES = [];
+    onValue(ref(db, 'tms/fx/rates'), snap => { RATES = TMS.fx.normalize(snap.val()); });
+
+    /* 审计日志写入器（记录谁审批、谁修改） */
+    TMS.audit.bind(p => push(ref(db, 'tms/audit_logs'), p));
 
     const VEHICLES = ["BAK8067ZM", "BAL9570ZM", "BAR6536ZM", "BBC296ZM", "BAR9208ZM"];
 
@@ -501,11 +508,18 @@
                 {key: 'status', header: '状态', format: v => v === 'approved' ? '已通过' : (v === 'rejected' ? '已拒绝' : '待审批')}
             ],
             render: (data) => `
-                <div class="info-row"><span class="label">司机:</span> <b>${data.driverName}</b></div>
+                <div class="info-row"><span class="label">司机:</span> <b>${esc(data.driverName || '-')}</b></div>
                 <div class="info-row"><span class="label">金额:</span> <span style="color:var(--c-warning);font-weight:bold">${amountLabel(data.amount, 'ZMW')}</span></div>
-                <div class="info-row"><span class="label">类型:</span> ${data.type}</div>
-                <div class="info-row"><span class="label">备注:</span> ${data.remark || '-'}</div>
-                ${data.approveRemark ? `<div class="remark-section"><strong>审批意见:</strong> ${data.approveRemark}<br><small>by ${data.approver || '未知'} @ ${data.approveTime ? new Date(data.approveTime).toLocaleString() : ''}</small></div>` : ''}
+                <div class="info-row"><span class="label">类型:</span> ${esc(data.type || '-')}</div>
+                <div class="info-row"><span class="label">备注:</span> ${esc(data.remark || '-')}</div>
+                ${data.orderId ? `<div class="info-row"><span class="label">关联订单:</span> <b>${esc(data.orderId)}</b>${data.plate ? ' · ' + esc(data.plate) : ''}</div>` : '<div class="info-row"><span class="label">关联订单:</span> <span style="color:var(--c-warning)">无（旧数据，无法计入订单）</span></div>'}
+                ${data.appliedAt
+                    ? `<div class="info-row"><span class="label">订单费用:</span> <span style="color:var(--c-success);font-weight:bold"><i class="bi bi-check-circle"></i> 已计入${data.appliedTo === 'completed' ? '已完成订单' : '订单'}的路上费用</span></div>`
+                    : (data.status === 'approved'
+                        ? `<div class="info-row"><span class="label">订单费用:</span> <span style="color:var(--c-danger)">未计入${data.applyError ? '：' + esc(data.applyError) : ''}</span>
+                             <button class="btn" style="padding:2px 8px;font-size:11px;margin-left:6px" onclick="retryApply('${data.id}')">重新计入</button></div>`
+                        : '')}
+                ${data.approveRemark ? `<div class="remark-section"><strong>审批意见:</strong> ${esc(data.approveRemark)}<br><small>by ${esc(data.approverName || data.approver || '未知')} @ ${data.approveTime ? new Date(data.approveTime).toLocaleString() : ''}</small></div>` : ''}
             `
         },
         publicExp: {
@@ -943,19 +957,124 @@
         pendingActionModule = null;
     };
 
-    function performAction() {
+    async function performAction() {
         if (!pendingActionId || !pendingActionModule) return;
         const remark = document.getElementById('remarkText').value.trim();
-        const path = `${MODULES[pendingActionModule].path}/${pendingActionId}`;
-        update(ref(db, path), {
-            status: pendingActionStatus,
-            approver: userRole,
-            approveRemark: remark || null,
-            approveTime: Date.now()
-        }).then(() => {
+        const modKey = pendingActionModule;
+        const recId = pendingActionId;
+        const nextStatus = pendingActionStatus;
+        const cfg = MODULES[modKey];
+        const path = `${cfg.path}/${recId}`;
+        const rec = (DATA[modKey] || []).find(r => r.id === recId) || {};
+
+        try {
+            await update(ref(db, path), {
+                status: nextStatus,
+                approver: userRole,
+                approverName: userName,
+                approveRemark: remark || null,
+                approveTime: Date.now()
+            });
+
+            TMS.audit.log(
+                '审批' + (nextStatus === 'approved' ? '通过' : '拒绝'),
+                `${cfg.short}｜${rec.driverName || rec.applicant || '未知'}｜${rec.amount !== undefined ? rec.amount : ''}`,
+                remark || '无审批意见'
+            );
+
+            // 司机费用通过后：计入该订单的"路上费用"，随订单一起归档到已完成订单
+            if (modKey === 'driverExp' && nextStatus === 'approved' && !rec.appliedAt) {
+                const res = await applyExpenseToOrder(rec, recId);
+                if (res.applied) {
+                    await update(ref(db, path), {
+                        appliedAt: Date.now(),
+                        appliedTo: res.where,
+                        appliedNote: res.msg || ''
+                    });
+                } else {
+                    // 记下失败原因，列表里可点"重新计入订单"重试
+                    await update(ref(db, path), {
+                        applyError: res.msg || '计入失败',
+                        applyTriedAt: Date.now()
+                    });
+                }
+            }
+
             closeRemarkModal();
-        }).catch(e => alert("错误: " + e.message));
+        } catch (e) {
+            alert("错误: " + e.message);
+        }
     }
+
+    /* ------------------------------------------------------------------
+       费用回写：OA 审批通过的司机费用 -> 订单 expenses -> 归档后进 completed_orders
+       幂等：同一 oaId 只写一次；金额按申请时的汇率快照，避免后续改汇率影响历史
+       ------------------------------------------------------------------ */
+    async function applyExpenseToOrder(rec, recId) {
+        const orderId = rec.orderId;
+        if (!orderId) return { applied: false, msg: '该申请未关联订单号（旧数据），无法计入' };
+
+        const parsed = TMS.util.parseAmount(rec.amount, 'ZMW');
+        if (!parsed.amount) return { applied: false, msg: '金额无法识别' };
+
+        const ts = Number(rec.timestamp) || Date.now();
+        const rate = TMS.fx.rateAt(RATES, ts);
+        const item = {
+            name: rec.type || '司机费用',
+            amount: parsed.amount,
+            currency: parsed.unit,
+            remark: rec.remark || '',
+            ts: ts,
+            source: 'oa',
+            oaId: recId,
+            orderId: orderId,
+            plate: rec.plate || '',
+            by: userName,
+            rate: rate,
+            usd: parsed.unit === 'USD' ? parsed.amount : parsed.amount / rate
+        };
+
+        const targets = [
+            { root: 'tms/orders/' + orderId, where: 'orders' },
+            { root: 'tms/completed_orders/' + orderId, where: 'completed' }
+        ];
+
+        for (const t of targets) {
+            const snap = await get(ref(db, t.root));
+            if (!snap.exists()) continue;
+
+            await runTransaction(ref(db, t.root + '/expenses'), cur => {
+                let arr = [];
+                if (Array.isArray(cur)) arr = cur.slice();
+                else if (cur && typeof cur === 'object') arr = Object.keys(cur).map(k => cur[k]);
+                // 幂等：已存在同一笔 OA 费用则不再写入
+                if (arr.some(e => e && e.oaId === recId)) return arr;
+                arr.push(item);
+                return arr;
+            });
+
+            return { applied: true, where: t.where, msg: '' };
+        }
+
+        return { applied: false, msg: '未找到订单 ' + orderId + '（可能已被清理或尚未生成）' };
+    }
+
+    /* 审批通过但当时没找到订单时的补偿入口 */
+    window.retryApply = async (recId) => {
+        const rec = (DATA.driverExp || []).find(r => r.id === recId);
+        if (!rec) return;
+        if (rec.appliedAt) { alert('该费用已计入订单'); return; }
+        const res = await applyExpenseToOrder(rec, recId);
+        if (res.applied) {
+            await update(ref(db, MODULES.driverExp.path + '/' + recId), {
+                appliedAt: Date.now(), appliedTo: res.where, appliedNote: '', applyError: null
+            });
+            TMS.audit.log('费用补记', `订单 ${rec.orderId}`, `金额 ${rec.amount}`);
+            alert('已计入订单');
+        } else {
+            alert(res.msg);
+        }
+    };
 
     window.confirmApprove = () => performAction();
     window.confirmReject = () => performAction();

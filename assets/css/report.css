@@ -1,0 +1,228 @@
+/* ==========================================================================
+   report.css — 新增报表类页面共用外壳（与 theme.css 配合使用）
+   适用：audit.html / finreport.html / settlement.html / profit.html
+   ========================================================================== */
+
+body {
+    margin: 0;
+    background: var(--c-bg);
+    color: var(--c-text-body);
+    font-family: var(--font-sans);
+    font-size: 14px;
+}
+
+/* 顶栏 */
+.rp-bar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 20px;
+    background: #fff;
+    border-bottom: 1px solid var(--c-border);
+    box-shadow: var(--sh-1);
+}
+.rp-bar h1 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--c-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.rp-bar .sub {
+    font-size: 12px;
+    color: var(--c-text-muted);
+    font-weight: 400;
+    margin-left: 4px;
+}
+.rp-bar .spacer { flex: 1; }
+
+.rp-wrap {
+    max-width: 1320px;
+    margin: 18px auto 40px;
+    padding: 0 16px;
+}
+
+/* 卡片 */
+.rp-card {
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--sh-1);
+    padding: 16px;
+    margin-bottom: 14px;
+}
+.rp-card h2 {
+    margin: 0 0 12px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--c-text);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* KPI */
+.rp-kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-bottom: 14px;
+}
+.rp-kpi {
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-lg);
+    padding: 14px 16px;
+    box-shadow: var(--sh-1);
+}
+.rp-kpi .k {
+    font-size: 12px;
+    color: var(--c-text-muted);
+    margin-bottom: 6px;
+}
+.rp-kpi .v {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--c-text);
+    line-height: 1.2;
+}
+.rp-kpi .v.money { color: var(--c-primary); }
+.rp-kpi .v.pos { color: var(--c-danger); }   /* 中国习惯：收入/正数用红 */
+.rp-kpi .v.neg { color: var(--c-success); }  /* 亏损/负数用绿 */
+.rp-kpi .t {
+    font-size: 11px;
+    color: var(--c-text-faint);
+    margin-top: 4px;
+}
+
+/* 筛选行 */
+.rp-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: flex-end;
+}
+.rp-filters label {
+    display: block;
+    font-size: 12px;
+    color: var(--c-text-muted);
+    margin-bottom: 4px;
+    font-weight: 600;
+}
+.rp-filters input,
+.rp-filters select {
+    padding: 8px 10px;
+    border: 1px solid var(--c-border-strong);
+    border-radius: var(--r);
+    font-size: 13px;
+    background: #fff;
+    outline: none;
+    min-width: 130px;
+}
+.rp-filters input:focus,
+.rp-filters select:focus { border-color: var(--c-primary); }
+
+/* 按钮 */
+.rp-btn {
+    padding: 8px 14px;
+    border-radius: var(--r);
+    border: 1px solid transparent;
+    background: var(--c-primary);
+    color: #fff;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.rp-btn:hover { background: var(--c-primary-hover); }
+.rp-btn.ghost { background: #fff; color: var(--c-text-body); border-color: var(--c-border-strong); }
+.rp-btn.ghost:hover { background: var(--c-surface-2); }
+.rp-btn.small { padding: 4px 10px; font-size: 12px; }
+.rp-btn.danger { background: var(--c-danger); }
+
+/* 表格 */
+.rp-table-wrap {
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-lg);
+    overflow: auto;
+    box-shadow: var(--sh-1);
+}
+.rp-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.rp-table th {
+    background: var(--c-surface-2);
+    text-align: left;
+    padding: 10px 12px;
+    color: var(--c-text-muted);
+    font-weight: 600;
+    font-size: 12px;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--c-border);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.rp-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--c-divider);
+    vertical-align: top;
+}
+.rp-table tbody tr:hover { background: #fbfcfe; }
+.rp-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.rp-table .muted { color: var(--c-text-muted); }
+.rp-empty { text-align: center; color: var(--c-text-faint); padding: 40px 10px; }
+
+/* 标签 */
+.rp-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: var(--r-pill);
+    font-size: 11px;
+    font-weight: 700;
+    background: var(--c-primary-soft);
+    color: var(--c-primary);
+    border: 1px solid var(--c-primary-soft-border);
+    white-space: nowrap;
+}
+.rp-tag.ok { background: var(--c-success-soft); color: var(--c-success); border-color: #bfe7d8; }
+.rp-tag.warn { background: var(--c-warning-soft); color: var(--c-warning); border-color: #f6dfb8; }
+.rp-tag.bad { background: var(--c-danger-soft); color: var(--c-danger); border-color: #fbd5d1; }
+.rp-tag.gray { background: #f2f4f7; color: #667085; border-color: #e4e7ec; }
+
+/* 图表 */
+.rp-chart { position: relative; height: 300px; }
+.rp-chart.sm { height: 240px; }
+.rp-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 14px;
+}
+
+/* 提示 */
+.rp-note {
+    font-size: 12px;
+    color: var(--c-text-muted);
+    background: var(--c-primary-soft);
+    border: 1px solid var(--c-primary-soft-border);
+    border-radius: var(--r);
+    padding: 8px 10px;
+    margin-bottom: 12px;
+}
+
+@media (max-width: 720px) {
+    .rp-bar { flex-wrap: wrap; padding: 10px 12px; }
+    .rp-bar h1 { font-size: 15px; }
+    .rp-wrap { padding: 0 10px; }
+    .rp-kpi .v { font-size: 18px; }
+}

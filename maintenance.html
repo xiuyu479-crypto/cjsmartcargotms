@@ -79,6 +79,9 @@
 </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 <link rel="stylesheet" href="assets/css/theme.css">
+<script src="assets/js/tms-core.js"></script>
+<script>// 登录校验：凭证存 sessionStorage，关闭浏览器/退出登录后需重新输密码
+TMS.session.requireLogin();</script>
 </head>
 <body>
 
@@ -120,6 +123,9 @@
         <div class="menu-card" onclick="openModule('m3', '出厂确认 / Check-out')"><span class="icon"><i class="bi bi-box-arrow-up"></i></span><h3>出厂确认</h3><small>Check-out</small></div>
         <div class="menu-card" onclick="openModule('m4', '配件统计 / Parts Log')"><span class="icon"><i class="bi bi-gear"></i></span><h3>配件统计</h3><small>Usage History</small></div>
         <div class="menu-card" onclick="openModule('m5', '实时看板 / Live Status')"><span class="icon"><i class="bi bi-display"></i></span><h3>状态看板</h3><small>Fleet Board</small></div>
+        <div class="menu-card" onclick="openModule('m7', '配件台账 / Parts Inventory')"><span class="icon"><i class="bi bi-box-seam"></i></span><h3>配件台账</h3><small>Inventory</small></div>
+        <div class="menu-card" onclick="openModule('m8', '维修报表 / Maintenance Report')"><span class="icon"><i class="bi bi-bar-chart"></i></span><h3>维修报表</h3><small>Report</small></div>
+        <div class="menu-card" onclick="openModule('m6', '维修讨论区 / Forum')"><span class="icon"><i class="bi bi-chat-dots"></i></span><h3>讨论区</h3><small>Forum</small></div>
     </div>
 
     <div id="m1" class="module-content">
@@ -171,6 +177,11 @@
             <div class="field"><label>出厂里程 / Release km</label><input type="number" id="m3_outOdo"></div>
             <div class="field"><label>机修名字 / Mechanic Name</label><input type="text" id="m3_finalTech"></div>
             <div class="field full"><label>消耗配件汇总 / Final Parts</label><textarea id="m3_finalParts"></textarea></div>
+            <div class="field full">
+                <label>配件消耗登记（可选，保存时自动扣减库存） / Parts Used</label>
+                <div id="m3_partRows"></div>
+                <button type="button" class="refresh-btn" style="background:var(--c-success);margin-top:8px" onclick="addPartRow()">+ 添加配件</button>
+            </div>
         </div>
         <button class="btn-submit" style="background:var(--success)" onclick="doCheckOut()">确认结算 / Settle & Release</button>
     </div>
@@ -192,11 +203,78 @@
         <h3>实时看板 / Fleet Board</h3>
         <div id="boardContainer" class="board-grid"></div>
     </div>
+
+    <div id="m7" class="module-content">
+        <h3>配件台账 / Parts Inventory</h3>
+        <div class="form-grid">
+            <div class="field"><label>配件名称 <span>*</span></label><input type="text" id="pt_name" placeholder="如: 机油滤芯"></div>
+            <div class="field"><label>规格 / SKU</label><input type="text" id="pt_sku"></div>
+            <div class="field"><label>单位</label><input type="text" id="pt_unit" placeholder="个 / 桶 / 套" value="个"></div>
+            <div class="field"><label>单价 (ZMW)</label><input type="number" id="pt_price" step="0.01"></div>
+            <div class="field"><label>期初库存</label><input type="number" id="pt_qty" step="1" value="0"></div>
+            <div class="field"><label>最低库存（低于则预警）</label><input type="number" id="pt_min" step="1" value="5"></div>
+        </div>
+        <div class="btn-group">
+            <button class="btn-submit" onclick="savePart()">保存配件 / Save</button>
+            <button class="btn-pdf" onclick="clearPartForm()">清空 / Reset</button>
+        </div>
+
+        <table>
+            <thead><tr><th>配件</th><th>规格</th><th>单价</th><th>库存</th><th>最低</th><th>状态</th><th>操作</th></tr></thead>
+            <tbody id="partTbody"></tbody>
+        </table>
+
+        <h3 style="margin-top:26px">出入库记录 / Stock Movements</h3>
+        <div style="display:flex;gap:10px;margin-bottom:10px">
+            <input type="text" id="mvFilter" placeholder="按配件名/车牌搜索" style="max-width:240px">
+            <button class="refresh-btn" onclick="renderMoves()">搜索</button>
+        </div>
+        <table>
+            <thead><tr><th>日期</th><th>配件</th><th>类型</th><th>数量</th><th>关联车辆</th><th>备注</th><th>记录人</th></tr></thead>
+            <tbody id="moveTbody"></tbody>
+        </table>
+    </div>
+
+    <div id="m8" class="module-content">
+        <h3>维修报表 / Maintenance Report</h3>
+        <div style="display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+            <input type="date" id="rp_from">
+            <input type="date" id="rp_to">
+            <button class="refresh-btn" onclick="renderReport()">生成 / Refresh</button>
+            <button class="btn-nav" style="background:var(--c-success)" onclick="exportReport()">导出 CSV</button>
+        </div>
+        <div id="rpKpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px"></div>
+        <div class="menu-grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">
+            <div>
+                <h4 style="margin:0 0 8px">按车辆</h4>
+                <table><thead><tr><th>车辆</th><th>维修次数</th><th>停场时长(h)</th><th>配件成本</th></tr></thead><tbody id="rpByVehicle"></tbody></table>
+            </div>
+            <div>
+                <h4 style="margin:0 0 8px">按月</h4>
+                <table><thead><tr><th>月份</th><th>维修次数</th><th>停场时长(h)</th><th>配件成本</th></tr></thead><tbody id="rpByMonth"></tbody></table>
+            </div>
+        </div>
+        <h4 style="margin:22px 0 8px">配件消耗 Top 10</h4>
+        <table><thead><tr><th>配件</th><th>数量</th><th>金额 (ZMW)</th></tr></thead><tbody id="rpParts"></tbody></table>
+    </div>
+
+    <div id="m6" class="module-content">
+        <h3>维修讨论区 / Forum</h3>
+        <div class="form-grid">
+            <div class="field full"><label>标题 <span>*</span></label><input type="text" id="fm_title" placeholder="如: BAL9570ZM 后桥异响"></div>
+            <div class="field full"><label>内容 <span>*</span></label><textarea id="fm_body" placeholder="描述现象、处理方式、经验..."></textarea></div>
+        </div>
+        <div class="btn-group">
+            <button class="btn-submit" onclick="postThread()">发布 / Post</button>
+            <button class="btn-pdf" onclick="renderForum()">刷新 / Refresh</button>
+        </div>
+        <div id="forumList" style="margin-top:18px"></div>
+    </div>
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-app.js";
-import { getDatabase, ref, update, push, get } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-database.js";
+import { getDatabase, ref, update, push, get, onValue, remove, set, runTransaction } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-database.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDEbePpsrXwD8Okqa93UOGUFE37c8SFHS0",
@@ -213,6 +291,28 @@ const db = getDatabase(app);
 
 let allVehicles = {};
 let boardTimer = null;
+
+const PARTS_PATH = 'tms/parts_catalog';
+const MOVES_PATH = 'tms/parts_moves';
+const FORUM_PATH = 'tms/forum_threads';
+const FORUM_REPLY_PATH = 'tms/forum_posts';
+
+let PARTS = {};
+let MOVES = {};
+let THREADS = {};
+let REPLIES = {};
+
+TMS.audit.bind(p => push(ref(db, 'tms/audit_logs'), p));
+
+onValue(ref(db, PARTS_PATH), s => { PARTS = s.val() || {}; if (isModuleOpen('m7')) renderPartTable(); });
+onValue(ref(db, MOVES_PATH), s => { MOVES = s.val() || {}; if (isModuleOpen('m7')) renderMoves(); if (isModuleOpen('m8')) renderReport(); });
+onValue(ref(db, FORUM_PATH), s => { THREADS = s.val() || {}; if (isModuleOpen('m6')) renderForum(); });
+onValue(ref(db, FORUM_REPLY_PATH), s => { REPLIES = s.val() || {}; if (isModuleOpen('m6')) renderForum(); });
+
+function isModuleOpen(id) {
+    const el = document.getElementById(id);
+    return el && el.classList.contains('active-module');
+}
 
 window.openModule = (id, title) => {
     document.getElementById('mainMenu').style.display = 'none';
@@ -236,6 +336,9 @@ async function refreshData(moduleId) {
     if(moduleId === 'm2') renderWarnings();
     if(moduleId === 'm4') renderPartsLog();
     if(moduleId === 'm5') startLiveBoard();
+    if(moduleId === 'm6') renderForum();
+    if(moduleId === 'm7') { renderPartTable(); renderMoves(); }
+    if(moduleId === 'm8') renderReport();
 }
 
 function fillSelects() {
@@ -331,15 +434,105 @@ window.updateM3Timer = () => {
     document.getElementById('m3_finalParts').value = v.pendingParts || "";
 };
 
+/* ---------------- 配件消耗（出厂登记） ---------------- */
+function partOptionsHtml(selected) {
+    const list = Object.keys(PARTS).map(k => {
+        const p = PARTS[k];
+        return `<option value="${k}" data-name="${(p.name || '').replace(/"/g, '&quot;')}" data-price="${p.price || 0}" ${selected === k ? 'selected' : ''}>${p.name || '未命名'}${p.sku ? ' / ' + p.sku : ''}（库存 ${p.qty || 0}）</option>`;
+    }).join('');
+    return '<option value="">-- 选择配件 --</option>' + list;
+}
+
+window.addPartRow = () => {
+    const box = document.getElementById('m3_partRows');
+    if (!Object.keys(PARTS).length) {
+        alert('还没有配件档案，请先到「配件台账」添加');
+        return;
+    }
+    const row = document.createElement('div');
+    row.className = 'part-row';
+    row.style.cssText = 'display:flex;gap:8px;margin-bottom:8px;align-items:center';
+    row.innerHTML = `
+        <select class="pr-part" style="flex:1">${partOptionsHtml('')}</select>
+        <input class="pr-qty" type="number" min="1" step="1" value="1" style="width:90px" placeholder="数量">
+        <button type="button" class="refresh-btn" style="background:var(--c-danger);margin:0" onclick="this.parentNode.remove()">×</button>
+    `;
+    box.appendChild(row);
+};
+
+function collectPartsUsed() {
+    const rows = Array.from(document.querySelectorAll('#m3_partRows .part-row'));
+    return rows.map(r => {
+        const sel = r.querySelector('.pr-part');
+        const qty = Number(r.querySelector('.pr-qty').value) || 0;
+        const opt = sel.options[sel.selectedIndex] || {};
+        return {
+            key: sel.value,
+            qty: qty,
+            name: opt.dataset ? opt.dataset.name : '',
+            price: Number(opt.dataset ? opt.dataset.price : 0) || 0
+        };
+    }).filter(p => p.key && p.qty > 0);
+}
+
 window.doCheckOut = async () => {
     const key = document.getElementById('m3_select').value;
     const outKm = document.getElementById('m3_outOdo').value;
     if(!key || !outKm) return alert("信息不全");
-    const v = allVehicles[key];
-    const log = { plate: v.head, mechanic: document.getElementById('m3_finalTech').value, duration: ((Date.now() - v.startTime) / 3600000).toFixed(2), parts: document.getElementById('m3_finalParts').value, date: new Date().toISOString().split('T')[0] };
+
+    const v = allVehicles[key] || {};
+    const used = collectPartsUsed();
+
+    // 库存预检，避免扣成负数
+    for (const u of used) {
+        const snap = await get(ref(db, PARTS_PATH + '/' + u.key));
+        const cur = Number((snap.val() || {}).qty) || 0;
+        if (cur < u.qty) {
+            alert(`配件库存不足：${u.name || u.key} 现有 ${cur}，需要 ${u.qty}`);
+            return;
+        }
+    }
+
+    // 扣减库存 + 写出库流水
+    for (const u of used) {
+        await runTransaction(ref(db, PARTS_PATH + '/' + u.key + '/qty'), q => (Number(q) || 0) - u.qty);
+        await push(ref(db, MOVES_PATH), {
+            partKey: u.key, name: u.name, type: 'out', qty: u.qty,
+            price: u.price, cost: u.price * u.qty,
+            plate: v.head || '', note: '维修出厂消耗',
+            at: Date.now(), by: TMS.session.name() || TMS.session.role()
+        });
+    }
+
+    const partsCost = used.reduce((s, u) => s + u.price * u.qty, 0);
+    const duration = ((Date.now() - v.startTime) / 3600000).toFixed(2);
+
+    const log = {
+        plate: v.head,
+        mechanic: document.getElementById('m3_finalTech').value,
+        duration: duration,
+        parts: document.getElementById('m3_finalParts').value,
+        partsUsed: used.map(u => ({ name: u.name, qty: u.qty, price: u.price })),
+        partsCost: partsCost,
+        serviceType: v.serviceType || '',
+        inKm: v.km || 0,
+        outKm: parseFloat(outKm),
+        date: TMS.util.today(),
+        at: Date.now(),
+        by: TMS.session.name() || TMS.session.role()
+    };
+
     await push(ref(db, "tms/maintenance_logs"), log);
-    await update(ref(db, `tms/vehicles/${key}`), { maintaining: false, startTime: null, km: parseFloat(outKm), lastServiceOdo: parseFloat(outKm), nextServiceOdo: parseFloat(outKm) + 5000 });
+    await update(ref(db, `tms/vehicles/${key}`), {
+        maintaining: false, startTime: null, km: parseFloat(outKm),
+        lastServiceOdo: parseFloat(outKm), nextServiceOdo: parseFloat(outKm) + 5000
+    });
+
+    TMS.audit.log('维修出厂', v.head || key,
+        `停场 ${duration}h｜配件成本 ${partsCost.toFixed(2)} ZMW${used.length ? '｜' + used.map(u => u.name + '×' + u.qty).join('、') : ''}`);
+
     alert("出厂结算完成！");
+    document.getElementById('m3_partRows').innerHTML = '';
     showMenu();
 };
 
@@ -396,6 +589,312 @@ window.sortTable = (colIndex) => {
     });
     rows.forEach(row => table.tBodies[0].appendChild(row));
 };
+
+/* ============================================================
+   配件台账
+   ============================================================ */
+window.savePart = async () => {
+    const name = document.getElementById('pt_name').value.trim();
+    if (!name) { alert('请填写配件名称'); return; }
+    const payload = {
+        name: name,
+        sku: document.getElementById('pt_sku').value.trim(),
+        unit: document.getElementById('pt_unit').value.trim() || '个',
+        price: Number(document.getElementById('pt_price').value) || 0,
+        qty: Number(document.getElementById('pt_qty').value) || 0,
+        minQty: Number(document.getElementById('pt_min').value) || 0,
+        updatedAt: Date.now()
+    };
+    const newRef = push(ref(db, PARTS_PATH));
+    await set(newRef, payload);
+    await push(ref(db, MOVES_PATH), {
+        partKey: newRef.key, name: payload.name, type: 'in', qty: payload.qty,
+        price: payload.price, cost: payload.price * payload.qty, plate: '',
+        note: '期初建档', at: Date.now(), by: TMS.session.name() || TMS.session.role()
+    });
+    TMS.audit.log('新增配件', payload.name, `期初 ${payload.qty} ${payload.unit}，单价 ${payload.price}`);
+    clearPartForm();
+};
+
+window.clearPartForm = () => {
+    ['pt_name', 'pt_sku', 'pt_price', 'pt_qty'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('pt_unit').value = '个';
+    document.getElementById('pt_min').value = 5;
+};
+
+function partBadge(p) {
+    const qty = Number(p.qty) || 0;
+    const min = Number(p.minQty) || 0;
+    if (qty <= 0) return '<span class="badge bg-red">缺货</span>';
+    if (min && qty <= min) return '<span class="badge bg-orange">低库存</span>';
+    return '<span class="badge bg-green">正常</span>';
+}
+
+function renderPartTable() {
+    const tbody = document.getElementById('partTbody');
+    if (!tbody) return;
+    const keys = Object.keys(PARTS);
+    if (!keys.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">还没有配件，请先在上方建档</td></tr>';
+        return;
+    }
+    tbody.innerHTML = keys.map(k => {
+        const p = PARTS[k];
+        return `<tr>
+            <td><b>${p.name || ''}</b></td>
+            <td>${p.sku || '-'}</td>
+            <td>${Number(p.price || 0).toFixed(2)}</td>
+            <td>${p.qty || 0} ${p.unit || ''}</td>
+            <td>${p.minQty || 0}</td>
+            <td>${partBadge(p)}</td>
+            <td class="actions">
+                <button class="editBtn" onclick="stockMove('${k}','in')">入库</button>
+                <button class="docBtn" style="background:var(--c-danger-soft);color:var(--c-danger);border:1px solid #fbd5d1" onclick="stockMove('${k}','out')">出库</button>
+                <button class="delBtn" onclick="delPart('${k}')">删除</button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+window.stockMove = async (key, type) => {
+    const p = PARTS[key] || {};
+    const input = prompt(`${type === 'in' ? '入库' : '出库'}数量（${p.name}，当前库存 ${p.qty || 0}）`, '1');
+    if (input === null) return;
+    const qty = Number(input);
+    if (!qty || qty <= 0) { alert('请输入正确数量'); return; }
+
+    if (type === 'out' && (Number(p.qty) || 0) < qty) { alert('库存不足'); return; }
+
+    const delta = type === 'in' ? qty : -qty;
+    await runTransaction(ref(db, PARTS_PATH + '/' + key + '/qty'), q => (Number(q) || 0) + delta);
+    await push(ref(db, MOVES_PATH), {
+        partKey: key, name: p.name || '', type: type, qty: qty,
+        price: Number(p.price) || 0, cost: (Number(p.price) || 0) * qty,
+        plate: '', note: '手动' + (type === 'in' ? '入库' : '出库'),
+        at: Date.now(), by: TMS.session.name() || TMS.session.role()
+    });
+    TMS.audit.log(type === 'in' ? '配件入库' : '配件出库', p.name || key, `${qty} ${p.unit || ''}`);
+};
+
+window.delPart = async (key) => {
+    const p = PARTS[key] || {};
+    if (!confirm(`删除配件「${p.name}」？历史出入库记录会保留。`)) return;
+    await remove(ref(db, PARTS_PATH + '/' + key));
+    TMS.audit.log('删除配件', p.name || key, '');
+};
+
+function renderMoves() {
+    const tbody = document.getElementById('moveTbody');
+    if (!tbody) return;
+    const kw = (document.getElementById('mvFilter').value || '').toLowerCase().trim();
+    const rows = Object.keys(MOVES).map(k => Object.assign({ _key: k }, MOVES[k]))
+        .sort((a, b) => Number(b.at) - Number(a.at))
+        .filter(m => !kw || `${m.name || ''} ${m.plate || ''}`.toLowerCase().includes(kw));
+
+    if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty">暂无出入库记录</td></tr>';
+        return;
+    }
+    tbody.innerHTML = rows.slice(0, 200).map(m => `<tr>
+        <td>${TMS.util.ymd(m.at)}</td>
+        <td>${m.name || '-'}</td>
+        <td>${m.type === 'in' ? '<span class="badge bg-green">入库</span>' : '<span class="badge bg-orange">出库</span>'}</td>
+        <td>${m.qty}</td>
+        <td>${m.plate || '-'}</td>
+        <td>${m.note || '-'}</td>
+        <td>${m.by || '-'}</td>
+    </tr>`).join('');
+}
+
+/* ============================================================
+   维修报表
+   ============================================================ */
+function logsInRange() {
+    const from = document.getElementById('rp_from').value;
+    const to = document.getElementById('rp_to').value;
+    return Object.values(LOGS_CACHE).filter(l => {
+        const day = l.date || TMS.util.ymd(l.at);
+        if (from && day < from) return false;
+        if (to && day > to) return false;
+        return true;
+    });
+}
+
+let LOGS_CACHE = {};
+onValue(ref(db, 'tms/maintenance_logs'), s => {
+    LOGS_CACHE = s.val() || {};
+    if (isModuleOpen('m8')) renderReport();
+    if (isModuleOpen('m4')) renderPartsLog();
+});
+
+function fmtHours(h) { return (Number(h) || 0).toFixed(1); }
+
+function kpiCard(title, value, sub) {
+    return `<div class="truck-card normal" style="color:#fff">
+        <div style="font-size:12px;opacity:.85">${title}</div>
+        <div style="font-size:22px;font-weight:700;margin:4px 0">${value}</div>
+        <div style="font-size:11px;opacity:.8">${sub || ''}</div>
+    </div>`;
+}
+
+window.renderReport = () => {
+    const logs = logsInRange();
+    const totalCost = logs.reduce((s, l) => s + (Number(l.partsCost) || 0), 0);
+    const totalHours = logs.reduce((s, l) => s + (Number(l.duration) || 0), 0);
+
+    document.getElementById('rpKpis').innerHTML =
+        kpiCard('维修工单', logs.length + ' 单', '区间内') +
+        kpiCard('累计停场', fmtHours(totalHours) + ' h', logs.length ? '单均 ' + fmtHours(totalHours / logs.length) + ' h' : '-') +
+        kpiCard('配件成本', totalCost.toFixed(2) + ' ZMW', '按出库单价计') +
+        kpiCard('有配件记录', logs.filter(l => (l.partsUsed || []).length).length + ' 单', '结构化登记');
+
+    const byVehicle = {}, byMonth = {};
+    logs.forEach(l => {
+        const vk = l.plate || '未知';
+        const mk = (l.date || TMS.util.ymd(l.at) || '').slice(0, 7);
+        if (!byVehicle[vk]) byVehicle[vk] = { n: 0, h: 0, c: 0 };
+        byVehicle[vk].n++; byVehicle[vk].h += Number(l.duration) || 0; byVehicle[vk].c += Number(l.partsCost) || 0;
+        if (!byMonth[mk]) byMonth[mk] = { n: 0, h: 0, c: 0 };
+        byMonth[mk].n++; byMonth[mk].h += Number(l.duration) || 0; byMonth[mk].c += Number(l.partsCost) || 0;
+    });
+
+    const vRows = Object.entries(byVehicle).sort((a, b) => b[1].c - a[1].c);
+    document.getElementById('rpByVehicle').innerHTML = vRows.length ? vRows.map(([k, v]) => `
+        <tr><td><b>${k}</b></td><td>${v.n}</td><td>${fmtHours(v.h)}</td><td>${v.c.toFixed(2)}</td></tr>`).join('')
+        : '<tr><td colspan="4" class="empty">无数据</td></tr>';
+
+    const mRows = Object.entries(byMonth).sort((a, b) => b[0].localeCompare(a[0]));
+    document.getElementById('rpByMonth').innerHTML = mRows.length ? mRows.map(([k, v]) => `
+        <tr><td>${k}</td><td>${v.n}</td><td>${fmtHours(v.h)}</td><td>${v.c.toFixed(2)}</td></tr>`).join('')
+        : '<tr><td colspan="4" class="empty">无数据</td></tr>';
+
+    // 配件消耗 Top10
+    const partAgg = {};
+    logs.forEach(l => (l.partsUsed || []).forEach(p => {
+        const k = p.name || '未命名';
+        if (!partAgg[k]) partAgg[k] = { qty: 0, cost: 0 };
+        partAgg[k].qty += Number(p.qty) || 0;
+        partAgg[k].cost += (Number(p.qty) || 0) * (Number(p.price) || 0);
+    }));
+    const pRows = Object.entries(partAgg).sort((a, b) => b[1].cost - a[1].cost).slice(0, 10);
+    document.getElementById('rpParts').innerHTML = pRows.length ? pRows.map(([k, v]) => `
+        <tr><td>${k}</td><td>${v.qty}</td><td>${v.cost.toFixed(2)}</td></tr>`).join('')
+        : '<tr><td colspan="3" class="empty">无结构化配件记录（旧工单只有文字描述）</td></tr>';
+};
+
+window.exportReport = () => {
+    const logs = logsInRange();
+    let csv = '日期,车牌,维修类型,机修,停场时长(h),配件成本(ZMW),配件明细,故障描述\n';
+    logs.sort((a, b) => String(a.date).localeCompare(String(b.date))).forEach(l => {
+        csv += [
+            l.date || TMS.util.ymd(l.at), l.plate || '', l.serviceType || '', l.mechanic || '',
+            l.duration || 0, l.partsCost || 0,
+            (l.partsUsed || []).map(p => `${p.name}×${p.qty}`).join(' '),
+            (l.parts || l.report || '').replace(/\n/g, ' ')
+        ].map(v => '"' + String(v === undefined || v === null ? '' : v).replace(/"/g, '""') + '"').join(',') + '\n';
+    });
+    TMS.util.download(`Maintenance_${TMS.util.today()}.csv`, csv);
+};
+
+/* ============================================================
+   讨论区
+   ============================================================ */
+window.postThread = async () => {
+    const title = document.getElementById('fm_title').value.trim();
+    const body = document.getElementById('fm_body').value.trim();
+    if (!title || !body) { alert('请填写标题和内容'); return; }
+
+    await push(ref(db, FORUM_PATH), {
+        title: title, body: body,
+        author: TMS.session.name() || TMS.session.role(),
+        at: Date.now(),
+        replyCount: 0,
+        lastAt: Date.now()
+    });
+    document.getElementById('fm_title').value = '';
+    document.getElementById('fm_body').value = '';
+};
+
+window.replyThread = async (tid) => {
+    const input = document.getElementById('reply_' + tid);
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) return;
+    const thread = THREADS[tid] || {};
+    await push(ref(db, FORUM_REPLY_PATH + '/' + tid), {
+        body: text,
+        author: TMS.session.name() || TMS.session.role(),
+        at: Date.now()
+    });
+    await update(ref(db, FORUM_PATH + '/' + tid), {
+        replyCount: (Number(thread.replyCount) || 0) + 1,
+        lastAt: Date.now()
+    });
+    input.value = '';
+};
+
+window.delThread = async (tid) => {
+    if (!confirm('删除该话题及其回复？')) return;
+    await remove(ref(db, FORUM_PATH + '/' + tid));
+    await remove(ref(db, FORUM_REPLY_PATH + '/' + tid));
+};
+
+function renderForum() {
+    const box = document.getElementById('forumList');
+    if (!box) return;
+    const threads = Object.keys(THREADS).map(k => Object.assign({ _key: k }, THREADS[k]))
+        .sort((a, b) => Number(b.lastAt || b.at) - Number(a.lastAt || a.at));
+
+    if (!threads.length) {
+        box.innerHTML = '<div class="empty">还没有话题，发布第一条维修经验吧。</div>';
+        return;
+    }
+
+    box.innerHTML = threads.map(t => {
+        const replies = Object.keys(REPLIES[t._key] || {})
+            .map(k => Object.assign({ _key: k }, REPLIES[t._key][k]))
+            .sort((a, b) => Number(a.at) - Number(b.at));
+        const replyHtml = replies.map(r => `
+            <div style="padding:8px 10px;border-left:3px solid var(--c-border);margin:8px 0 8px 6px;background:#fafbfc">
+                <div style="font-size:12px;color:#94a3b8">${r.author || '-'} · ${TMS.util.dt(r.at)}</div>
+                <div style="font-size:13px;white-space:pre-wrap">${escapeHtml(r.body || '')}</div>
+            </div>`).join('');
+
+        return `<div class="module-content active-module" style="display:block;margin-bottom:14px;padding:16px;background:#fff;border:1px solid #e2e8f0;border-radius:12px">
+            <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
+                <div>
+                    <div style="font-weight:700;font-size:15px">${escapeHtml(t.title || '')}</div>
+                    <div style="font-size:12px;color:#94a3b8;margin-top:2px">
+                        ${escapeHtml(t.author || '-')} · ${TMS.util.dt(t.at)} · ${replies.length} 条回复
+                    </div>
+                </div>
+                <button class="btn-nav" style="background:var(--c-danger-soft);color:var(--c-danger)" onclick="delThread('${t._key}')">删除</button>
+            </div>
+            <div style="margin:10px 0;font-size:13px;white-space:pre-wrap">${escapeHtml(t.body || '')}</div>
+            ${replyHtml}
+            <div style="display:flex;gap:8px;margin-top:10px">
+                <input id="reply_${t._key}" placeholder="回复..." style="flex:1;padding:9px;border:1px solid #cbd5e1;border-radius:8px">
+                <button class="refresh-btn" style="margin:0" onclick="replyThread('${t._key}')">回复</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function escapeHtml(s) {
+    return String(s === null || s === undefined ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+/* 报表默认区间：本月 */
+(function initReportRange() {
+    const now = new Date();
+    const first = new Date(now.getFullYear(), now.getMonth(), 1);
+    const fromEl = document.getElementById('rp_from');
+    const toEl = document.getElementById('rp_to');
+    if (fromEl) fromEl.value = TMS.util.ymd(first);
+    if (toEl) toEl.value = TMS.util.ymd(now);
+})();
 </script>
 </body>
 </html>

@@ -42,6 +42,7 @@ body{font-family:Arial,Helvetica,sans-serif;background:#f5f7fb;margin:0;color:#2
 .issue-item:last-child { margin-bottom: 0; }
 .issue-ts { font-size: 12px; color: #999; margin-bottom: 4px; }
 .issue-msg { font-size: 15px; color: #333; line-height: 1.4; word-break: break-all; }
+.issue-type { display:inline-block; font-size:12px; font-weight:700; color:var(--c-danger); background:var(--c-danger-soft); border:1px solid #fbd5d1; padding:2px 8px; border-radius:999px; margin-bottom:6px; }
 .issue-actions { display: flex; gap: 10px; }
 .btn-resolve { flex: 1; background: var(--c-success); color: white; padding: 10px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
 .btn-close { flex: 1; background: #eee; color: #333; padding: 10px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
@@ -50,14 +51,12 @@ body{font-family:Arial,Helvetica,sans-serif;background:#f5f7fb;margin:0;color:#2
 <script type="module" src="./assets/js/firebase.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 <link rel="stylesheet" href="assets/css/theme.css">
+<script src="assets/js/tms-core.js"></script>
 </head>
 <body>
 <script>
-// --- 修复点：移除了 "uki1998" 硬编码，改为通用校验 ---
-if(!localStorage.getItem("tms_auth")){
-  const page = location.pathname.split('/').pop();
-  window.location.href = "password.html?redirect=" + encodeURIComponent(page);
-}
+// 登录校验：凭证存 sessionStorage，关闭浏览器/退出登录后需重新输密码
+TMS.session.requireLogin();
 </script>
 
 <div style="position:fixed;top:15px;left:15px;z-index:999;">
@@ -438,9 +437,25 @@ const issueListContainer = document.getElementById('issueListContainer');
 const btnResolveIssue = document.getElementById('btnResolveIssue');
 const btnCloseIssue = document.getElementById('btnCloseIssue');
 let activeIssueOrderId = null;
+let activeIssueOrder = null;
 
+// 异常类型字典（与司机端 report.html 保持一致）
+const ISSUE_TYPE_MAP = {
+    breakdown: { zh: '车辆故障', en: 'Breakdown' },
+    customs:   { zh: '边检/海关滞留', en: 'Customs Delay' },
+    accident:  { zh: '交通事故', en: 'Accident' },
+    cargo:     { zh: '货物损坏', en: 'Cargo Damage' },
+    road:      { zh: '道路封闭/绕行', en: 'Road Blocked' },
+    fine:      { zh: '罚款', en: 'Fine' },
+    other:     { zh: '其他', en: 'Other' }
+};
+
+/* ---------------- 异常查看 ----------------
+   图片不再上传/暂存（走 WhatsApp），本页只展示结构化异常信息。
+*/
 function openIssueModal(order) {
     activeIssueOrderId = order._id;
+    activeIssueOrder = order;
     issueModal.style.display = 'flex';
     issueListContainer.innerHTML = '';
     
@@ -454,12 +469,24 @@ function openIssueModal(order) {
         sortedIssues.forEach(issue => {
             const item = document.createElement('div');
             item.className = 'issue-item';
+
             // 兼容 dateStr 或 timestamp
             let timeStr = issue.dateStr;
             if(!timeStr && issue.timestamp) timeStr = new Date(issue.timestamp).toLocaleString();
-            
+
+            // 异常类型：中文 / English 双语展示（旧数据没有 type 时只显示正文）
+            const typeZh = issue.typeZh || (ISSUE_TYPE_MAP[issue.type] ? ISSUE_TYPE_MAP[issue.type].zh : '');
+            const typeEn = issue.typeEn || (ISSUE_TYPE_MAP[issue.type] ? ISSUE_TYPE_MAP[issue.type].en : '');
+            const typeHtml = (typeZh || typeEn)
+                ? `<div class="issue-type"><i class="bi bi-tag"></i> ${escapeHtml(typeZh || '')}${typeZh && typeEn ? ' / ' : ''}${escapeHtml(typeEn || '')}</div>`
+                : '';
+
+            // 照片：不再展示（图片统一走 WhatsApp）
+            const photoHtml = '';
+
             item.innerHTML = `
                 <div class="issue-ts"><i class="bi bi-clock-history"></i> ${escapeHtml(timeStr)}</div>
+                ${typeHtml}
                 <div class="issue-msg">${escapeHtml(issue.message)}</div>
             `;
             issueListContainer.appendChild(item);
@@ -476,11 +503,10 @@ btnCloseIssue.onclick = () => {
 btnResolveIssue.onclick = async () => {
     if(!activeIssueOrderId) return;
     try {
-        await update(ref(db, ORDERS_PATH + '/' + activeIssueOrderId), {
-            hasActiveIssue: false // 将活跃异常标志设为false，红色感叹号将消失
-        });
+        await update(ref(db, ORDERS_PATH + '/' + activeIssueOrderId), { hasActiveIssue: false });
         issueModal.style.display = 'none';
         activeIssueOrderId = null;
+        activeIssueOrder = null;
     } catch(e) {
         alert(trans("操作失败: ","Operation failed: ") + e.message);
     }

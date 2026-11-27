@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>修改记录 / Audit Log - TMS</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="stylesheet" href="assets/css/theme.css">
+<link rel="stylesheet" href="assets/css/report.css">
+<script src="assets/js/tms-core.js"></script>
+<script>// 仅管理员可访问
+TMS.session.requireRole(['admin']);</script>
+</head>
+<body>
+
+<div class="rp-bar">
+    <h1><i class="bi bi-journal-text"></i> 财务修改记录 <span class="sub">谁录入 · 谁修改 · 谁审批</span></h1>
+    <div class="spacer"></div>
+    <button class="rp-btn ghost" onclick="location.href='index.html'"><i class="bi bi-arrow-left"></i> 返回主页</button>
+    <button class="rp-btn ghost" onclick="location.href='fleetcost.html'"><i class="bi bi-cash-stack"></i> 车队财务</button>
+</div>
+
+<div class="rp-wrap">
+    <div class="rp-note">
+        记录范围：车队费用录入/充值/删除/回退/入账、汇率调整、OA 审批、订单费用回写、账单开票与收款。仅管理员可见。
+    </div>
+
+    <div class="rp-kpis">
+        <div class="rp-kpi"><div class="k">记录总数</div><div class="v" id="kTotal">0</div><div class="t">全部历史</div></div>
+        <div class="rp-kpi"><div class="k">今日新增</div><div class="v" id="kToday">0</div><div class="t">按本地日期</div></div>
+        <div class="rp-kpi"><div class="k">最近操作人</div><div class="v" id="kLastUser" style="font-size:16px">-</div><div class="t" id="kLastTime">-</div></div>
+        <div class="rp-kpi"><div class="k">筛选结果</div><div class="v" id="kShown">0</div><div class="t">当前条件</div></div>
+    </div>
+
+    <div class="rp-card">
+        <div class="rp-filters">
+            <div><label>开始日期</label><input type="date" id="fFrom"></div>
+            <div><label>结束日期</label><input type="date" id="fTo"></div>
+            <div><label>操作人</label><input type="text" id="fUser" placeholder="姓名/角色"></div>
+            <div><label>操作类型</label><select id="fAction"><option value="">全部</option></select></div>
+            <div><label>关键字</label><input type="text" id="fKey" placeholder="订单号 / 车牌 / 金额"></div>
+            <button class="rp-btn" onclick="applyFilter()"><i class="bi bi-funnel"></i> 筛选</button>
+            <button class="rp-btn ghost" onclick="resetFilter()">重置</button>
+            <button class="rp-btn ghost" onclick="exportCsv()"><i class="bi bi-download"></i> 导出</button>
+        </div>
+    </div>
+
+    <div class="rp-table-wrap" style="max-height:62vh">
+        <table class="rp-table">
+            <thead>
+                <tr>
+                    <th style="width:150px">时间</th>
+                    <th style="width:110px">操作人</th>
+                    <th style="width:70px">角色</th>
+                    <th style="width:130px">操作</th>
+                    <th style="width:200px">对象</th>
+                    <th>详情</th>
+                </tr>
+            </thead>
+            <tbody id="tbody">
+                <tr><td colspan="6" class="rp-empty">加载中...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-app.js";
+import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-database.js";
+
+const firebaseConfig = {
+    apiKey: "AIzaSyDEbePpsrXwD8Okqa93UOGUFE37c8SFHS0",
+    authDomain: "cjsmartcargo-datebase.firebaseapp.com",
+    databaseURL: "https://cjsmartcargo-datebase-default-rtdb.firebaseio.com",
+    projectId: "cjsmartcargo-datebase"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+const esc = TMS.util.esc;
+let LOGS = [];
+
+onValue(ref(db, 'tms/audit_logs'), (snap) => {
+    const raw = snap.val() || {};
+    LOGS = Object.keys(raw).map(k => Object.assign({ _key: k }, raw[k]))
+        .sort((a, b) => Number(b.at || 0) - Number(a.at || 0));
+    buildActionOptions();
+    updateKpis();
+    applyFilter();
+}, (err) => {
+    document.getElementById('tbody').innerHTML = `<tr><td colspan="6" class="rp-empty">读取失败：${esc(err.message)}</td></tr>`;
+});
+
+function buildActionOptions() {
+    const sel = document.getElementById('fAction');
+    const cur = sel.value;
+    const actions = Array.from(new Set(LOGS.map(l => l.action).filter(Boolean))).sort();
+    sel.innerHTML = '<option value="">全部</option>' + actions.map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join('');
+    sel.value = actions.indexOf(cur) >= 0 ? cur : '';
+}
+
+function updateKpis() {
+    const today = TMS.util.today();
+    document.getElementById('kTotal').innerText = LOGS.length;
+    document.getElementById('kToday').innerText = LOGS.filter(l => TMS.util.ymd(l.at) === today).length;
+    const last = LOGS[0];
+    document.getElementById('kLastUser').innerText = last ? (last.by || '-') : '-';
+    document.getElementById('kLastTime').innerText = last ? TMS.util.dt(last.at) : '-';
+}
+
+function filtered() {
+    const from = document.getElementById('fFrom').value;
+    const to = document.getElementById('fTo').value;
+    const user = document.getElementById('fUser').value.trim().toLowerCase();
+    const action = document.getElementById('fAction').value;
+    const key = document.getElementById('fKey').value.trim().toLowerCase();
+
+    return LOGS.filter(l => {
+        const day = TMS.util.ymd(l.at);
+        if (from && day < from) return false;
+        if (to && day > to) return false;
+        if (action && l.action !== action) return false;
+        if (user && !(`${l.by || ''} ${l.role || ''}`.toLowerCase().includes(user))) return false;
+        if (key) {
+            const hay = `${l.target || ''} ${l.detail || ''}`.toLowerCase();
+            if (!hay.includes(key)) return false;
+        }
+        return true;
+    });
+}
+
+function applyFilter() {
+    const rows = filtered();
+    document.getElementById('kShown').innerText = rows.length;
+
+    const tbody = document.getElementById('tbody');
+    if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="rp-empty">没有符合条件的记录</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = rows.slice(0, 800).map(l => `
+        <tr>
+            <td class="muted">${TMS.util.dt(l.at)}</td>
+            <td><b>${esc(l.by || '-')}</b></td>
+            <td><span class="rp-tag gray">${esc(l.role || '-')}</span></td>
+            <td><span class="rp-tag">${esc(l.action || '-')}</span></td>
+            <td>${esc(l.target || '-')}</td>
+            <td class="muted">${esc(l.detail || '-')}</td>
+        </tr>`).join('') + (rows.length > 800
+            ? `<tr><td colspan="6" class="rp-empty">仅显示最近 800 条，请缩小筛选范围（共 ${rows.length} 条）</td></tr>` : '');
+}
+
+function resetFilter() {
+    ['fFrom', 'fTo', 'fUser', 'fKey'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('fAction').value = '';
+    applyFilter();
+}
+
+function exportCsv() {
+    const rows = filtered();
+    let csv = '时间,操作人,角色,操作,对象,详情\n';
+    rows.forEach(l => {
+        csv += [TMS.util.dt(l.at), l.by || '', l.role || '', l.action || '', l.target || '', l.detail || '']
+            .map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',') + '\n';
+    });
+    TMS.util.download(`AuditLog_${TMS.util.today()}.csv`, csv);
+}
+
+document.getElementById('fFrom').addEventListener('change', applyFilter);
+document.getElementById('fTo').addEventListener('change', applyFilter);
+document.getElementById('fAction').addEventListener('change', applyFilter);
+['fUser', 'fKey'].forEach(id => document.getElementById(id).addEventListener('input', applyFilter));
+</script>
+</body>
+</html>

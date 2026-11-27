@@ -137,23 +137,17 @@ body {
 </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 <link rel="stylesheet" href="assets/css/theme.css">
+<script src="assets/js/tms-core.js"></script>
 </head>
 
 <body>
 
 <script>
 /**
- * 逻辑检查点 1：防止重复验证
- * 只要 localStorage 里有有效的 tms_auth，就不跳转到登录页
+ * 登录校验：凭证只存在 sessionStorage
+ * —— 关闭浏览器 / 退出登录后再次访问，一定回到 password.html
  */
-const authToken = localStorage.getItem("tms_auth");
-const userRole = localStorage.getItem("tms_role");
-
-if(!authToken) {
-    // 只有没登录时才去 password.html
-    const page = location.pathname.split('/').pop() || "index.html";
-    window.location.href = "password.html?redirect=" + encodeURIComponent(page);
-}
+TMS.session.requireLogin();
 </script>
 
 <header class="appbar">
@@ -166,7 +160,7 @@ if(!authToken) {
     </div>
     <div class="appbar-right">
         <button class="langBtn" onclick="switchLang()"><i class="bi bi-translate"></i> <span id='langLabel'>English</span></button>
-        <button class="logoutBtn" onclick="localStorage.removeItem('tms_auth'); localStorage.removeItem('tms_role'); localStorage.removeItem('tms_fin_auth'); localStorage.removeItem('tms_fin_at'); window.location.href='password.html';"><i class="bi bi-box-arrow-right"></i> 退出</button>
+        <button class="logoutBtn" onclick="TMS.session.logout()"><i class="bi bi-box-arrow-right"></i> 退出</button>
     </div>
 </header>
 
@@ -213,11 +207,27 @@ if(!authToken) {
     </div>
     <div class="card" onclick="go('attendance.html')" id="btn10">
         <i class="bi bi-geo-alt card-icon"></i>
-        GPS 车辆追踪
+        考勤报告
     </div>
     <div class="card" onclick="go('clients.html')" id="btnClients">
         <i class="bi bi-people card-icon"></i>
         客户信息
+    </div>
+    <div class="card" onclick="go('finreport.html')" id="btnFinReport">
+        <i class="bi bi-graph-up-arrow card-icon"></i>
+        费用统计报表
+    </div>
+    <div class="card" onclick="go('settlement.html')" id="btnSettle">
+        <i class="bi bi-wallet2 card-icon"></i>
+        司机结算
+    </div>
+    <div class="card" onclick="go('profit.html')" id="btnProfit">
+        <i class="bi bi-pie-chart card-icon"></i>
+        单车毛利分析
+    </div>
+    <div class="card" onclick="go('audit.html')" id="btnAudit">
+        <i class="bi bi-journal-text card-icon"></i>
+        修改记录
     </div>
 </div>
 
@@ -231,7 +241,7 @@ let currentLang = localStorage.getItem('tms_lang') || "zh";
  * 例外：财务模块(fleetcost.html)对 staff 开放跳转，密码在页面内做二级验证。
  */
 function go(url){
-    const role = localStorage.getItem("tms_role");
+    const role = TMS.session.role();
 
     // 管理员 (admin) 拥有所有权限，直接过
     if (role === 'admin') {
@@ -240,17 +250,19 @@ function go(url){
     }
 
     // 员工 (staff)：财务模块(fleetcost)允许进入 —— 页面内会再要求输入"财务密码"做二次验证，
-    // 用密码区分普通员工与财务人员；客户账单(billing)仍仅限管理员。
+    // 用密码区分普通员工与财务人员；客户账单(billing)、司机结算、毛利分析、修改记录仍仅限管理员。
     if (role === 'staff') {
-        if (url === 'billing.html') {
+        const adminOnly = ['billing.html', 'settlement.html', 'profit.html', 'audit.html'];
+        if (adminOnly.includes(url)) {
             alert(currentLang === "zh" ? "权限不足：仅限管理员访问。" : "Access Denied: Admin only.");
             return;
         }
     }
 
-    // 访客 (viewer) 权限拦截：不能进 新建订单、费用统计、客户账单、客户信息
+    // 访客 (viewer) 权限拦截：不能进 新建订单、费用统计、客户账单、客户信息、各类财务报表
     if (role === 'viewer') {
-        const restricted = ['neworders.html', 'fleetcost.html', 'billing.html', 'clients.html'];
+        const restricted = ['neworders.html', 'fleetcost.html', 'billing.html', 'clients.html',
+                            'finreport.html', 'settlement.html', 'profit.html', 'audit.html'];
         if (restricted.includes(url)) {
             alert(currentLang === "zh" ? "权限不足：访客无法访问此功能。" : "Access Denied: Restricted for viewers.");
             return;
@@ -259,6 +271,17 @@ function go(url){
 
     // 默认跳转
     window.location.href = url + '?lang=' + currentLang; 
+}
+
+// 按角色隐藏入口：修改记录仅管理员可见
+function applyRoleUI(){
+    const role = TMS.session.role();
+    const auditCard = document.getElementById('btnAudit');
+    if (auditCard && role !== 'admin') auditCard.style.display = 'none';
+    const settleCard = document.getElementById('btnSettle');
+    if (settleCard && role !== 'admin') settleCard.style.display = 'none';
+    const profitCard = document.getElementById('btnProfit');
+    if (profitCard && role !== 'admin') profitCard.style.display = 'none';
 }
 
 const langPack = {
@@ -276,7 +299,11 @@ const langPack = {
         btn8:"车队费用统计",
         btn9:"客户账单",
         btn10:"考勤报告",
-        btnClients: "客户信息"
+        btnClients: "客户信息",
+        btnFinReport: "费用统计报表",
+        btnSettle: "司机结算",
+        btnProfit: "单车毛利分析",
+        btnAudit: "修改记录"
     },
     en:{
         langLabel:"中文",
@@ -292,7 +319,11 @@ const langPack = {
         btn8:"Fleet Cost",
         btn9:"Client Billing",
         btn10:"Attendance",
-        btnClients: "Clients Info"
+        btnClients: "Clients Info",
+        btnFinReport: "Cost Report",
+        btnSettle: "Driver Settlement",
+        btnProfit: "Margin Analysis",
+        btnAudit: "Audit Log"
     }
 };
 
@@ -319,6 +350,12 @@ function applyLang(){
     updateCard("btn9", t.btn9, "receipt");
     updateCard("btn10", t.btn10, "geo-alt");
     updateCard("btnClients", t.btnClients, "people");
+    updateCard("btnFinReport", t.btnFinReport, "graph-up-arrow");
+    updateCard("btnSettle", t.btnSettle, "wallet2");
+    updateCard("btnProfit", t.btnProfit, "pie-chart");
+    updateCard("btnAudit", t.btnAudit, "journal-text");
+
+    applyRoleUI();
 
     // 语言切换后同步刷新右上角角标的提示文案
     if (typeof renderBadges === 'function') renderBadges();

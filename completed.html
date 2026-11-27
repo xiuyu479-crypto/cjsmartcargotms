@@ -37,25 +37,13 @@ tr:hover{background:#fcfdfe}
 </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 <link rel="stylesheet" href="assets/css/theme.css">
+<script src="assets/js/tms-core.js"></script>
 </head>
 <body>
 
 <script>
-// 登录校验：与 index.html / dynamic.html 保持一致，未登录跳转统一登录页
-(function () {
-    const token = localStorage.getItem("tms_auth");
-    const role = localStorage.getItem("tms_role");
-    if (!token) {
-        const page = location.pathname.split('/').pop() + location.search;
-        window.location.href = "password.html?redirect=" + encodeURIComponent(page);
-        return;
-    }
-    // 财务统计与 index.html 一致：仅管理员可访问
-    if (role !== "admin") {
-        alert("权限不足：仅限管理员访问。");
-        window.location.href = "index.html";
-    }
-})();
+// 登录校验：凭证存 sessionStorage；财务统计仅管理员可访问
+TMS.session.requireRole(['admin']);
 </script>
 
 <div class="header">
@@ -70,7 +58,7 @@ tr:hover{background:#fcfdfe}
       <input type="number" id="fuelPrice" class="input-s" value="1.17" step="0.01">
     </div>
     <div class="config-item">
-      <span><i class="bi bi-currency-exchange"></i> 汇率(1 USD : ZMW):</span>
+      <span><i class="bi bi-currency-exchange"></i> 兜底汇率(无历史记录时):</span>
       <input type="number" id="exRate" class="input-s" value="20" step="0.1">
     </div>
     <div style="color:#999; font-size:12px">提示：修改参数后点击“查询”刷新计算。其他费用修改后请点击“存”。</div>
@@ -97,13 +85,14 @@ tr:hover{background:#fcfdfe}
           <th>过境费(USD)</th>
           <th>燃油成本(USD)</th>
           <th>路上费用(折算USD)</th>
+          <th>OA/路上明细(USD)</th>
           <th>其他费用(手动)</th>
           <th>毛利(USD)</th>
           <th>完成日期</th>
         </tr>
       </thead>
       <tbody id="tableBody">
-        <tr><td colspan="11" style="text-align:center;padding:40px;color:#999">正在同步云端数据...</td></tr>
+        <tr><td colspan="12" style="text-align:center;padding:40px;color:#999">正在同步云端数据...</td></tr>
       </tbody>
     </table>
   </div>
@@ -111,7 +100,7 @@ tr:hover{background:#fcfdfe}
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-app.js";
-import { getDatabase, ref, onValue, update } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-database.js";
+import { getDatabase, ref, onValue, update, push } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-database.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDEbePpsrXwD8Okqa93UOGUFE37c8SFHS0",
@@ -126,27 +115,63 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
+// 审计日志写入器
+TMS.audit.bind(p => push(ref(db, 'tms/audit_logs'), p));
+
 const tableBody = document.getElementById('tableBody');
 const searchBtn = document.getElementById('searchBtn');
 const fuelPriceIn = document.getElementById('fuelPrice');
 const exRateIn = document.getElementById('exRate');
 
-// 汇率共享：与 billing.html 使用同一 localStorage key，避免两页汇率不一致
-const EX_RATE_KEY = 'tms_exRate';
-(function initSharedRate() {
-    const saved = localStorage.getItem(EX_RATE_KEY);
-    if (saved) exRateIn.value = saved;
-})();
-exRateIn.addEventListener('change', () => {
-    localStorage.setItem(EX_RATE_KEY, exRateIn.value);
+// 汇率历史：折算优先用"订单归档时"的历史汇率，保证历史金额不被新汇率改写
+let RATES = [];
+onValue(ref(db, 'tms/fx/rates'), (snap) => {
+    RATES = TMS.fx.normalize(snap.val());
+    render();
 });
 
 let allOrders = {};
 let allDispatch = {}; // 新增：用于存储原始派车单数据以回溯费用
+let dispatchByOrder = {}; // confirmedOrderId -> dispatch（旧订单没存 relDispatchId）
+
+function indexDispatch() {
+    dispatchByOrder = {};
+    Object.keys(allDispatch).forEach(k => {
+        const d = allDispatch[k] || {};
+        if (d.confirmedOrderId) dispatchByOrder[d.confirmedOrderId] = d;
+    });
+}
+
+// 取某笔业务发生时的汇率（历史表为空时回落到输入框里的旧口径）
+function rateOf(ts) {
+    if (RATES.length) return TMS.fx.rateAt(RATES, ts);
+    return Number(exRateIn.value) || 20;
+}
+
+// 路上费用明细（OA 审批回写 + 调度手工录入）
+function collectExpenses(o) {
+    const raw = o.expenses;
+    const list = Array.isArray(raw) ? raw : (raw && typeof raw === 'object' ? Object.values(raw) : []);
+    let usd = 0, count = 0;
+    const detail = [];
+    list.forEach(e => {
+        if (!e) return;
+        const ts = Number(e.ts || e.time) || Number(o.archivedAt) || Date.now();
+        const r = Number(e.rate) || rateOf(ts);
+        const unit = (e.currency || 'ZMW').toUpperCase();
+        const amt = Number(e.amount) || 0;
+        const u = (e.usd !== undefined && e.usd !== null && e.usd !== '') ? Number(e.usd) : (unit === 'USD' ? amt : amt / r);
+        usd += u;
+        count++;
+        detail.push(`${e.name || '费用'} ${amt} ${unit}${e.source === 'oa' ? ' (OA)' : ''}`);
+    });
+    return { usd, count, detail };
+}
 
 // 核心财务计算逻辑
 function computeFinance(o) {
-    const rate = Number(exRateIn.value) || 20;
+    // 历史汇率优先：按订单归档时间取当时的汇率
+    const rate = rateOf(Number(o.archivedAt) || Number(o.startTime));
     const fPrice = Number(fuelPriceIn.value) || 1.17;
 
     // --- 修复逻辑开始：回溯数据 ---
@@ -155,6 +180,8 @@ function computeFinance(o) {
     let dData = {};
     if (o.relDispatchId && allDispatch[o.relDispatchId]) {
         dData = allDispatch[o.relDispatchId];
+    } else if (o.orderId && dispatchByOrder[o.orderId]) {
+        dData = dispatchByOrder[o.orderId];
     }
     
     // 1. 运费读取 (优先读取订单本身，若无则读取回溯的派车单数据)
@@ -174,7 +201,7 @@ function computeFinance(o) {
     
     // 司机津贴(allowance)：业务口径已确认为【额外津贴】，与 Trip Money / Bonus 相加
     //（不替代 fTrip，两者是不同性质的钱，故此处不做二选一）
-    // 单位固定为 ZMW（派车单无单位选择框，PDF 表头亦标注 ZMW），一律按当前汇率折 USD
+    // 单位固定为 ZMW（派车单无单位选择框，PDF 表头亦标注 ZMW），一律按当时汇率折 USD
     const allowanceVal = Number(o.allowance || 0);
     const allowanceUSD = allowanceVal / rate;
 
@@ -200,28 +227,32 @@ function computeFinance(o) {
     const liters = Number(o.fuelTotal || o.totalFuel || 0);
     const fuelCostUSD = liters * fPrice;
 
-    // 5. 手动添加的其他费用
+    // 5. 路上费用明细（OA 审批回写 + 调度手工录入），每笔按自身发生时汇率折算
+    const exp = collectExpenses(o);
+
+    // 6. 手动添加的其他费用（存了当时汇率就按当时汇率）
     let manualUSD = 0;
     if(o.manualExtra) {
-        manualUSD = (o.manualExtra.unit === 'ZMW') ? (Number(o.manualExtra.val) / rate) : Number(o.manualExtra.val);
+        const mRate = Number(o.manualExtra.rate) || rate;
+        manualUSD = (o.manualExtra.unit === 'ZMW') ? (Number(o.manualExtra.val) / mRate) : Number(o.manualExtra.val);
     }
 
-    // 6. 天数计算
+    // 7. 天数计算
     const start = o.startTime || 0;
     const end = o.archivedAt || o.finishTime || Date.now();
     const days = start ? ((end - start) / (1000 * 60 * 60 * 24)).toFixed(1) : "-";
 
-    const totalCost = fuelCostUSD + transitUSD + roadExpenseUSD + manualUSD;
+    const totalCost = fuelCostUSD + transitUSD + roadExpenseUSD + manualUSD + exp.usd;
     const gross = (revenueUSD - totalCost).toFixed(2);
 
-    return { revenueUSD, fuelCostUSD, transitUSD, roadExpenseUSD, manualUSD, gross, days, liters };
+    return { revenueUSD, fuelCostUSD, transitUSD, roadExpenseUSD, manualUSD, expUSD: exp.usd, expCount: exp.count, expDetail: exp.detail, gross, days, liters, rate };
 }
 
 function render(dateF = '', keyF = '') {
     tableBody.innerHTML = '';
     // 如果还没加载完数据，暂不渲染
     if (Object.keys(allOrders).length === 0 && Object.keys(allDispatch).length === 0) {
-         tableBody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:40px;color:#999">正在同步云端数据...</td></tr>';
+         tableBody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:40px;color:#999">正在同步云端数据...</td></tr>';
          return;
     }
 
@@ -256,6 +287,9 @@ function render(dateF = '', keyF = '') {
                 <td>$${fin.transitUSD.toFixed(2)}</td>
                 <td>$${fin.fuelCostUSD.toFixed(2)}</td>
                 <td>$${fin.roadExpenseUSD.toFixed(2)}</td>
+                <td title="${fin.expDetail.join(' | ').replace(/"/g,'')}">
+                    ${fin.expCount ? `<b>$${fin.expUSD.toFixed(2)}</b><br><small style="color:#888">${fin.expCount} 笔${fin.expDetail.some(d=>d.includes('(OA)')) ? ' · 含OA' : ''}</small>` : '<span style="color:#bbb">-</span>'}
+                </td>
                 <td>
                     <div class="extra-input-group">
                         <input type="number" class="input-mini" id="ev-${id}" value="${o.manualExtra?.val || 0}">
@@ -267,21 +301,23 @@ function render(dateF = '', keyF = '') {
                     </div>
                 </td>
                 <td><span class="badge-gp ${fin.gross >= 0 ? 'gp-pos' : 'gp-neg'}">$${fin.gross}</span></td>
-                <td>${dateStr}</td>
+                <td>${dateStr}<br><small style="color:#aaa">汇率 ${fin.rate.toFixed(2)}</small></td>
             `;
             tableBody.appendChild(row);
         }
     });
 }
 
-// 保存手动费用
+// 保存手动费用（同时快照当时汇率，纳入审计）
 window.saveExtra = async (id) => {
     const val = document.getElementById(`ev-${id}`).value;
     const unit = document.getElementById(`eu-${id}`).value;
+    const rate = rateOf(Date.now());
     try {
         await update(ref(db, `tms/completed_orders/${id}`), {
-            manualExtra: { val: Number(val), unit: unit }
+            manualExtra: { val: Number(val), unit: unit, rate: rate, ts: Date.now(), by: TMS.session.name() }
         });
+        TMS.audit.log('其他费用修改', `订单 ${id}`, `${val} ${unit}（汇率 ${rate}）`);
         alert("费用已更新");
     } catch(e) { alert("失败: " + e.message); }
 };
@@ -295,6 +331,7 @@ onValue(ref(db, "tms/completed_orders"), (snapshot) => {
 // 新增：同时监听 dispatch 以获取原始预设费用
 onValue(ref(db, "tms/dispatch"), (snapshot) => {
     allDispatch = snapshot.val() || {};
+    indexDispatch();
     render();
 });
 
@@ -302,17 +339,24 @@ searchBtn.addEventListener('click', () => {
     render(document.getElementById('dateFilter').value, document.getElementById('keyword').value);
 });
 
+// 兜底汇率 / 燃油单价变动后重算
+[exRateIn, fuelPriceIn].forEach(el => el.addEventListener('change', () => {
+    render(document.getElementById('dateFilter').value, document.getElementById('keyword').value);
+}));
+
 document.getElementById('exportBtn').addEventListener('click', () => {
-    let csv = "\uFEFF订单号,客户,车牌,完成天数,里程,油耗,运费(USD),过境费(USD),燃油成本(USD),路上费用(USD),其他费用(USD),毛利(USD),日期\n";
+    let csv = "\uFEFF订单号,客户,车牌,完成天数,里程,油耗,运费(USD),过境费(USD),燃油成本(USD),路上费用(USD),OA明细(USD),其他费用(USD),毛利(USD),汇率,日期\n";
     Object.values(allOrders).forEach(o => {
         const f = computeFinance(o);
-        csv += `${o.orderId},${o.customer},${o.tractor},${f.days},${(Number(o.loadedKm)||0)+(Number(o.emptyKm)||0)},${f.liters},${f.revenueUSD.toFixed(2)},${f.transitUSD.toFixed(2)},${f.fuelCostUSD.toFixed(2)},${f.roadExpenseUSD.toFixed(2)},${f.manualUSD.toFixed(2)},${f.gross},${o.archivedAt ? new Date(o.archivedAt).toLocaleDateString() : '-'}\n`;
+        csv += [
+            o.orderId, o.customer, o.tractor, f.days,
+            (Number(o.loadedKm)||0)+(Number(o.emptyKm)||0), f.liters,
+            f.revenueUSD.toFixed(2), f.transitUSD.toFixed(2), f.fuelCostUSD.toFixed(2),
+            f.roadExpenseUSD.toFixed(2), f.expUSD.toFixed(2), f.manualUSD.toFixed(2), f.gross,
+            f.rate.toFixed(2), o.archivedAt ? TMS.util.ymd(o.archivedAt) : '-'
+        ].map(v => '"' + String(v === undefined || v === null ? '' : v).replace(/"/g, '""') + '"').join(',') + '\n';
     });
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `Report_${Date.now()}.csv`;
-    link.click();
+    TMS.util.download(`Report_${TMS.util.today()}.csv`, csv);
 });
 </script>
 </body>

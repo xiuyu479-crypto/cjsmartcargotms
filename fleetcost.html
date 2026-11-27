@@ -53,6 +53,7 @@
     </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 <link rel="stylesheet" href="assets/css/theme.css">
+<script src="assets/js/tms-core.js"></script>
 </head>
 <body>
 
@@ -65,6 +66,9 @@
         <div class="d-flex gap-2">
             <button class="btn btn-primary-soft px-4" data-bs-toggle="modal" data-bs-target="#rechargeModal" id="t-btn-recharge">充值</button>
             <button class="btn btn-ui-light px-4" data-bs-toggle="modal" data-bs-target="#spendModal" id="t-btn-spend">费用录入</button>
+            <button class="btn btn-ui-light" onclick="location.href='finreport.html'"><i class="bi bi-bar-chart-line"></i> 费用报表</button>
+            <button class="btn btn-ui-light" id="btnAuditLink" style="display:none" onclick="location.href='audit.html'"><i class="bi bi-journal-text"></i> 修改记录</button>
+            <button class="btn btn-ui-light" data-bs-toggle="modal" data-bs-target="#fxModal"><i class="bi bi-currency-exchange"></i> 汇率</button>
             <button class="btn btn-ui-light" onclick="exportExcel()" id="t-btn-export">导出全部数据</button>
             <button class="btn btn-ui-light" onclick="toggleLang()" id="langBtn">English</button>
         </div>
@@ -226,6 +230,44 @@
     </div>
 </div>
 
+<!-- 汇率历史：已经发生的费用按当时的汇率折算，新增汇率只影响之后发生的业务 -->
+<div class="modal fade" id="fxModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content border-0">
+            <div class="modal-header border-0">
+                <h6 class="fw-bold m-0"><i class="bi bi-currency-exchange"></i> 汇率历史 (1 USD = ? ZMW)</h6>
+            </div>
+            <div class="modal-body pt-0">
+                <div class="alert alert-light border small mb-2 py-2">
+                    录入费用时会自动快照当日汇率；修改这里的新汇率<b>不会</b>改变历史费用金额。
+                </div>
+                <div id="fxAddBox" class="row g-2 align-items-end mb-3" style="display:none">
+                    <div class="col-4">
+                        <label class="small text-muted">汇率 (ZMW / USD)</label>
+                        <input type="number" step="0.0001" id="fxRateInput" class="form-control form-control-sm shadow-none" placeholder="21.50">
+                    </div>
+                    <div class="col-4">
+                        <label class="small text-muted">生效日期</label>
+                        <input type="date" id="fxDateInput" class="form-control form-control-sm shadow-none">
+                    </div>
+                    <div class="col-4">
+                        <button class="btn btn-sm btn-primary w-100" onclick="addFxRate()">保存汇率</button>
+                    </div>
+                </div>
+                <div class="table-responsive" style="max-height:340px;overflow:auto">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead><tr><th>生效日期</th><th>汇率 (ZMW/USD)</th><th>记录人</th></tr></thead>
+                        <tbody id="fxTbody"><tr><td colspan="3" class="text-center text-muted py-3">加载中...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button class="btn btn-ui-light" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- 财务模块二级验证：主登录身份为 staff 时，需再输入财务密码 -->
 <div class="modal fade" id="finAuthModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-sm modal-dialog-centered">
@@ -275,23 +317,73 @@ const db = firebase.database();
 // --- 权限变量 ---
 let isAdmin = false;
 
+// --- 汇率历史 + 审计日志 ---
+// 汇率历史：tms/fx/rates/{key} = { rate, effectiveAt, by }
+// 录入任何费用时都会快照当时汇率，历史金额不会被新汇率改写。
+let RATES = [];
+db.ref('tms/fx/rates').on('value', snap => {
+    RATES = TMS.fx.normalize(snap.val());
+    renderFxHistory();
+});
+
+function currentRate() {
+    return TMS.fx.current(RATES);
+}
+
+function renderFxHistory() {
+    const tbody = document.getElementById('fxTbody');
+    const addBox = document.getElementById('fxAddBox');
+    if (addBox) addBox.style.display = isAdmin ? 'flex' : 'none';
+    if (!tbody) return;
+
+    if (!RATES.length) {
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted py-3">暂无汇率记录，当前默认按 ' + TMS.fx.DEFAULT + ' 折算</td></tr>';
+        return;
+    }
+    tbody.innerHTML = RATES.slice().reverse().map(r => `
+        <tr>
+            <td>${TMS.util.ymd(r.effectiveAt)}</td>
+            <td class="fw-bold">${Number(r.rate).toFixed(4)}</td>
+            <td class="text-muted">${TMS.util.esc(r.by || '-')}</td>
+        </tr>`).join('');
+}
+
+function addFxRate() {
+    if (!isAdmin) { alert('仅管理员可修改汇率'); return; }
+    const rate = parseFloat(document.getElementById('fxRateInput').value);
+    const dstr = document.getElementById('fxDateInput').value || TMS.util.today();
+    if (!rate || rate <= 0) { alert('请输入正确的汇率'); return; }
+
+    // 取当天 08:00 作为生效点，避免时区把日期推到前一天
+    const effectiveAt = new Date(dstr + 'T08:00:00').getTime();
+    const payload = {
+        rate: rate,
+        effectiveAt: effectiveAt,
+        by: TMS.session.name() || TMS.session.role(),
+        createdAt: Date.now()
+    };
+    db.ref('tms/fx/rates').push(payload).then(() => {
+        TMS.audit.log('汇率新增', `1 USD = ${rate} ZMW`, `生效日期 ${dstr}`);
+        document.getElementById('fxRateInput').value = '';
+    });
+}
+
+// 审计日志写入器（compat SDK）
+TMS.audit.bind(p => db.ref('tms/audit_logs').push(p));
+
 // --- 权限模型 ---
 // 主登录（password.html）决定 tms_role：admin / staff / viewer
 //   admin  → 直接进入，具备回退、删除权限
 //   staff  → 需通过"财务密码"二次验证后进入，无回退、删除权限
 //   viewer → 禁止进入财务模块
 // 财务验证状态单独存放，不污染主登录状态
-const FIN_TTL_MS = 12 * 60 * 60 * 1000; // 财务验证有效期：12 小时
-
+// 财务验证状态放 sessionStorage（TMS.session），关闭浏览器即失效，不再长期免密
 function finAuthValid() {
-    const tk = localStorage.getItem('tms_fin_auth');
-    const at = Number(localStorage.getItem('tms_fin_at') || 0);
-    return !!tk && at > 0 && (Date.now() - at < FIN_TTL_MS);
+    return TMS.session.finValid();
 }
 
 function clearFinAuth() {
-    localStorage.removeItem('tms_fin_auth');
-    localStorage.removeItem('tms_fin_at');
+    try { sessionStorage.removeItem('tms_fin_auth'); sessionStorage.removeItem('tms_fin_at'); } catch (e) {}
 }
 
 function showFinAuthModal() {
@@ -342,9 +434,8 @@ async function handleFinLogin() {
             return;
         }
 
-        localStorage.setItem('tms_fin_auth', result.token);
-        localStorage.setItem('tms_fin_at', String(Date.now()));
-
+        // 财务验证状态写 sessionStorage：关闭浏览器后需要重新验证
+        TMS.session.setFin(result.token);
         bootstrap.Modal.getInstance(document.getElementById('finAuthModal'))?.hide();
 
         isAdmin = false; // 财务人员：可查看与提交申请，无回退/删除权限
@@ -357,18 +448,17 @@ async function handleFinLogin() {
     }
 }
 
-// 页面加载：先验主登录身份，再按角色决定是否放行
+// 页面加载：先验主登录身份（sessionStorage），再按角色决定是否放行
 window.onload = () => {
     applyLangUI();
 
-    const token = localStorage.getItem('tms_auth');
-    const role = localStorage.getItem('tms_role');
-
     // 1) 没有主登录 → 去登录页，登录后回到本页
-    if (!token) {
-        location.replace('password.html?redirect=' + encodeURIComponent('fleetcost.html'));
+    if (!TMS.session.valid()) {
+        location.replace(TMS.session.loginUrl());
         return;
     }
+
+    const role = TMS.session.role();
 
     // 2) 访客：财务模块一律拒绝
     if (role === 'viewer') {
@@ -381,10 +471,13 @@ window.onload = () => {
     if (role === 'admin') {
         isAdmin = true;
         applyFilters();
+        renderFxHistory(); // 管理员才显示"保存汇率"表单
+        const auditBtn = document.getElementById('btnAuditLink');
+        if (auditBtn) auditBtn.style.display = '';
         return;
     }
 
-    // 4) 普通员工：必须通过财务密码验证（12 小时内免重复输入）
+    // 4) 普通员工：必须通过财务密码验证（同一浏览器会话内免重复输入）
     isAdmin = false;
     if (finAuthValid()) {
         applyFilters();
@@ -466,6 +559,9 @@ function handleBulkSpend() {
     const batch = {};
     // 如果没有选车牌，则默认为一条“非车辆/办公室”记录
     const platesToProcess = selectedPlates.length > 0 ? selectedPlates : ["OFFICE/OTHER"];
+    // 快照录入当时的汇率：以后调整汇率不会改变这笔账
+    const rate = currentRate();
+    const nowTs = Date.now();
 
     platesToProcess.forEach(plate => {
         const newKey = db.ref().child('tms/fleetFinance/logs').push().key;
@@ -477,11 +573,16 @@ function handleBulkSpend() {
             user: user,
             reason: reason,
             status: currency === 'USD' ? 'fixed' : 'pending',
-            createdAt: Date.now()
+            createdAt: nowTs,
+            rate: rate,
+            usdValue: currency === 'USD' ? amount : amount / rate,
+            createdBy: TMS.session.name() || TMS.session.role()
         };
     });
 
     db.ref("tms/fleetFinance/logs").update(batch).then(() => {
+        TMS.audit.log('费用录入', `${currency} ${amount} × ${platesToProcess.length} 台`,
+            `车牌: ${platesToProcess.join(', ')}｜事由: ${reason || '-'}｜申请人: ${user || '-'}｜汇率: ${rate}`);
         bootstrap.Modal.getInstance(document.getElementById('spendModal')).hide();
         document.getElementById('spdAmount').value = '';
         clearCheckPlates();
@@ -493,8 +594,14 @@ function handleRecharge() {
     const curr = document.getElementById('recCurrency').value;
     const note = document.getElementById('recNote').value;
     if(!amt) return;
+    const rate = currentRate();
     db.ref("tms/fleetFinance/logs").push({
-        type: 'recharge', currency: curr, amount: amt, note: note, createdAt: Date.now()
+        type: 'recharge', currency: curr, amount: amt, note: note,
+        createdAt: Date.now(), rate: rate,
+        usdValue: curr === 'USD' ? amt : amt / rate,
+        createdBy: TMS.session.name() || TMS.session.role()
+    }).then(() => {
+        TMS.audit.log('账户充值', `${curr} ${amt}`, `备注: ${note || '-'}｜汇率: ${rate}`);
     });
     bootstrap.Modal.getInstance(document.getElementById('rechargeModal')).hide();
     document.getElementById('recAmount').value = '';
@@ -515,7 +622,7 @@ function applyFilters() {
     const fReason = document.getElementById('filterReason').value;
 
     const filtered = allLogs.filter(log => {
-        const logDate = new Date(log.createdAt).toISOString().split('T')[0];
+        const logDate = TMS.util.ymd(log.createdAt);
         if (fDate && logDate !== fDate) return false;
         if (fPlate && !log.plate?.toUpperCase().includes(fPlate)) return false;
         if (fUser && !log.user?.includes(fUser)) return false;
@@ -604,10 +711,16 @@ function batchInvoice() {
     const selected = document.querySelectorAll('.item-check:checked');
     if(selected.length === 0) return;
     const updates = {};
+    let sum = 0;
     selected.forEach(cb => {
-        updates[`tms/fleetFinance/logs/${cb.getAttribute('data-key')}/status`] = 'invoiced';
+        const k = cb.getAttribute('data-key');
+        updates[`tms/fleetFinance/logs/${k}/status`] = 'invoiced';
+        const rec = allLogs.find(l => l.key === k);
+        if (rec) sum += Number(rec.amount) || 0;
     });
-    db.ref().update(updates);
+    db.ref().update(updates).then(() => {
+        TMS.audit.log('确认入账', `${selected.length} 笔 / ZMW ${sum.toFixed(2)}`, '批量回收票据');
+    });
 }
 
 function resetFilters() {
@@ -619,14 +732,21 @@ function resetFilters() {
 }
 
 function exportExcel() {
-    let csv = "\uFEFFDate,Type,Currency,Plate,User,Reason,Amount,Status,Note\n";
+    let csv = "\uFEFFDate,Type,Currency,Plate,User,Reason,Amount,Rate(ZMW/USD),USD,Status,Note,CreatedBy\n";
     allLogs.forEach(d => {
-        csv += `${new Date(d.createdAt).toLocaleDateString()},${d.type},${d.currency||'ZMW'},${d.plate||''},${d.user||''},${d.reason||''},${d.amount},${d.status||''},${d.note||''}\n`;
+        const rate = Number(d.rate) || currentRate();
+        const usd = d.usdValue !== undefined ? d.usdValue : (d.currency === 'USD' ? d.amount : d.amount / rate);
+        // 用本地日期，避免 UTC 把早间记录算到前一天
+        csv += [
+            TMS.util.ymd(d.createdAt), d.type, d.currency || 'ZMW', d.plate || '', d.user || '',
+            d.reason || '', d.amount, rate, Number(usd || 0).toFixed(2), d.status || '', d.note || '',
+            d.createdBy || ''
+        ].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',') + '\n';
     });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `Fleet_Report_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `Fleet_Report_${TMS.util.today()}.csv`;
     link.click();
 }
 
@@ -641,6 +761,8 @@ function deleteLog(key, type, currency, amount) {
         return;
     }
     if (confirm("确认删除此记录？此操作将影响余额。")) {
+        TMS.audit.log('删除账目', `${type} ${currency} ${amount}`,
+            `车牌: ${(allLogs.find(l => l.key === key) || {}).plate || '-'}｜key: ${key}`);
         db.ref(`tms/fleetFinance/logs/${key}`).remove();
     }
 }
@@ -652,6 +774,9 @@ function revertLog(key) {
         return;
     }
     if (confirm("确认回退此记录到待回收状态？")) {
+        const rec = allLogs.find(l => l.key === key) || {};
+        TMS.audit.log('账目回退', `${rec.currency || 'ZMW'} ${rec.amount || ''}`,
+            `车牌: ${rec.plate || '-'}｜key: ${key}`);
         db.ref(`tms/fleetFinance/logs/${key}/status`).set('pending');
     }
 }
@@ -701,6 +826,7 @@ function showRechargeDetail(key) {
 }
 
 applyLangUI();
+document.getElementById('fxDateInput').value = TMS.util.today();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>

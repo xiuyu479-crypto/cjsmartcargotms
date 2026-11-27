@@ -26,13 +26,34 @@ body{font-family:Arial,Helvetica,sans-serif;margin:0;background:var(--bg);color:
 .btn-pdf{background:var(--c-primary)}
 
 .table-container{background:white;border-radius:8px;overflow-x:auto;box-shadow:0 2px 8px rgba(0,0,0,0.04)}
-table{width:100%;border-collapse:collapse;font-size:12px;min-width:1500px}
+table{width:100%;border-collapse:collapse;font-size:12px;min-width:1240px}
 th{background:#f8f9fc;text-align:left;padding:12px;color:#666;border-bottom:2px solid #edf0f5;white-space:nowrap}
 td{padding:12px;border-bottom:1px solid #edf0f5;color:#444;vertical-align:middle}
 tr:hover{background:#fcfdfe}
-.badge{padding:4px 8px;border-radius:4px;font-weight:bold}
+.badge{padding:4px 8px;border-radius:4px;font-weight:bold;white-space:nowrap}
 .badge-paid{background:var(--paid);color:white}
 .badge-unpaid{background:var(--unpaid);color:white}
+.badge-draft{background:#e2e8f0;color:#475569}
+.badge-sent{background:#dbeafe;color:#1d4ed8}
+.badge-partial{background:#fef3c7;color:#92400e}
+.badge-clear{background:var(--paid);color:white}
+/* 订单号/状态列不折行，避免挤成三行 */
+#tableBody td:first-child, #tableBody td:nth-child(7), #tableBody td:nth-child(8) { white-space:nowrap; }
+
+/* 收款弹窗 */
+.modal-mask { display:none; position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:2000; align-items:center; justify-content:center; }
+.modal-mask.show { display:flex; }
+.modal-box { background:#fff; border-radius:12px; width:92%; max-width:440px; padding:20px; box-shadow:0 18px 48px rgba(0,0,0,.18); }
+.modal-box h3 { margin:0 0 4px; font-size:16px; color:var(--accent); }
+.modal-box .sub { font-size:12px; color:#888; margin-bottom:14px; }
+.modal-box label { display:block; font-size:12px; color:#666; margin:10px 0 4px; font-weight:600; }
+.modal-box input, .modal-box select { width:100%; padding:9px; border:1px solid #ddd; border-radius:6px; box-sizing:border-box; font-size:13px; }
+.modal-actions { display:flex; gap:10px; margin-top:18px; }
+.modal-actions .btn { flex:1; }
+.btn-ghost { background:#eef2f7; color:#475569; }
+.pay-list { max-height:260px; overflow:auto; font-size:12px; }
+.pay-list table { min-width:0; width:100%; font-size:12px; }
+.pay-list th, .pay-list td { padding:8px; }
 
 /* 手动输入框 */
 .extra-input-group { display: flex; align-items: center; gap: 4px; }
@@ -58,25 +79,14 @@ tr:hover{background:#fcfdfe}
 </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 <link rel="stylesheet" href="assets/css/theme.css">
+<script src="assets/js/tms-core.js"></script>
 </head>
 <body>
 
 <script>
-// 登录校验：与 index.html / dynamic.html 保持一致，未登录跳转统一登录页
-(function () {
-    const token = localStorage.getItem("tms_auth");
-    const role = localStorage.getItem("tms_role");
-    if (!token) {
-        const page = location.pathname.split('/').pop() + location.search;
-        window.location.href = "password.html?redirect=" + encodeURIComponent(page);
-        return;
-    }
-    // 客户账单与 index.html 一致：仅管理员可访问
-    if (role !== "admin") {
-        alert("权限不足：仅限管理员访问。");
-        window.location.href = "index.html";
-    }
-})();
+// 登录校验：凭证存 sessionStorage，关闭浏览器/退出登录后需重新输密码
+// 客户账单：仅管理员可访问
+TMS.session.requireRole(['admin']);
 </script>
 
 <div class="header">
@@ -87,10 +97,10 @@ tr:hover{background:#fcfdfe}
 <div class="container">
   <div class="config-bar">
     <div class="config-item">
-      <span><i class="bi bi-currency-exchange"></i> 汇率(1 USD : ZMW):</span>
+      <span><i class="bi bi-currency-exchange"></i> 兜底汇率(无历史记录时):</span>
       <input type="number" id="exRate" class="input-s" value="20" step="0.1">
     </div>
-    <div style="color:#999; font-size:12px">提示：修改汇率后点击“查询”刷新计算。</div>
+    <div style="color:#999; font-size:12px">每笔订单按<b>完成当时</b>的历史汇率折算，修改这里不影响历史账单。</div>
   </div>
 
   <div class="filterCard">
@@ -114,14 +124,14 @@ tr:hover{background:#fcfdfe}
     <table>
       <thead>
         <tr>
-          <th>订单号</th>
+          <th>订单号 / 发票号</th>
           <th>客户</th>
           <th>线路</th>
           <th>完成日期</th>
           <th>运费(USD)</th>
           <th>运费(ZMW)</th>
-          <th>支付状态</th>
-          <th>支付金额(手动)</th>
+          <th>账单状态</th>
+          <th>收款进度</th>
           <th>操作</th>
         </tr>
       </thead>
@@ -129,6 +139,37 @@ tr:hover{background:#fcfdfe}
         <tr><td colspan="9" style="text-align:center;padding:40px;color:#999">正在同步云端数据...</td></tr>
       </tbody>
     </table>
+  </div>
+</div>
+
+<div class="modal-mask" id="payModal">
+  <div class="modal-box">
+    <h3 id="payModalTitle">登记收款</h3>
+    <div class="sub" id="payModalSub">--</div>
+    <label>收款金额</label>
+    <div style="display:flex;gap:8px">
+      <input type="number" id="payAmount" step="0.01" placeholder="0.00" style="flex:1">
+      <select id="payCurrency" style="width:90px"><option>USD</option><option>ZMW</option></select>
+    </div>
+    <label>收款日期</label>
+    <input type="date" id="payDate">
+    <label>备注（水单号/方式）</label>
+    <input type="text" id="payNote" placeholder="可选">
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closePayModal()">取消</button>
+      <button class="btn" onclick="submitPayment()">确认收款</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="payListModal">
+  <div class="modal-box">
+    <h3>收款流水</h3>
+    <div class="sub" id="payListSub">--</div>
+    <div class="pay-list" id="payListBody"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="document.getElementById('payListModal').classList.remove('show')">关闭</button>
+    </div>
   </div>
 </div>
 
@@ -162,7 +203,7 @@ tr:hover{background:#fcfdfe}
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-app.js";
-import { getDatabase, ref, onValue, update } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-database.js";
+import { getDatabase, ref, onValue, update, push, runTransaction } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-database.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDEbePpsrXwD8Okqa93UOGUFE37c8SFHS0",
@@ -184,40 +225,78 @@ const genPdfBtn = document.getElementById('genPdfBtn');
 const exRateIn = document.getElementById('exRate');
 const customerSelect = document.getElementById('customerSelect');
 
-// 汇率共享：与 completed.html 使用同一 localStorage key，避免两页汇率不一致
-const EX_RATE_KEY = 'tms_exRate';
-(function initSharedRate() {
-    const saved = localStorage.getItem(EX_RATE_KEY);
-    if (saved) exRateIn.value = saved;
-})();
-exRateIn.addEventListener('change', () => {
-    localStorage.setItem(EX_RATE_KEY, exRateIn.value);
+// 汇率历史：每笔账单按"订单完成时"的历史汇率折算，改汇率不改历史
+let RATES = [];
+onValue(ref(db, 'tms/fx/rates'), (snap) => {
+    RATES = TMS.fx.normalize(snap.val());
+    render();
 });
+
+function rateAt(ts) {
+    return RATES.length ? TMS.fx.rateAt(RATES, ts) : (Number(exRateIn.value) || 20);
+}
+
+// 审计日志写入器
+TMS.audit.bind(p => push(ref(db, 'tms/audit_logs'), p));
 
 let allOrders = {};
 let allDispatch = {};
+let dispatchByOrder = {}; // confirmedOrderId -> dispatch（旧订单没存 relDispatchId，靠它回溯运费）
 let uniqueCustomers = new Set();
+
+function indexDispatch() {
+    dispatchByOrder = {};
+    Object.keys(allDispatch).forEach(k => {
+        const d = allDispatch[k] || {};
+        if (d.confirmedOrderId) dispatchByOrder[d.confirmedOrderId] = d;
+    });
+}
+
+// 收款流水：新的 payments 数组优先；旧数据（只有一个 paidAmount）自动兼容成一条
+function paymentsOf(o) {
+    const raw = o.payments;
+    let list = Array.isArray(raw) ? raw.slice() : (raw && typeof raw === 'object' ? Object.values(raw) : []);
+    if (!list.length && o.paidAmount && Number(o.paidAmount.val) > 0) {
+        list = [{
+            amount: Number(o.paidAmount.val),
+            currency: o.paidAmount.unit || 'USD',
+            at: o.archivedAt || Date.now(),
+            rate: rateAt(o.archivedAt),
+            note: '旧数据'
+        }];
+    }
+    return list.filter(p => p && Number(p.amount) > 0);
+}
+
+function paymentUSD(p, o) {
+    const r = Number(p.rate) || rateAt(p.at || o.archivedAt);
+    const unit = String(p.currency || 'USD').toUpperCase();
+    const amt = Number(p.amount) || 0;
+    return unit === 'ZMW' ? amt / r : amt;
+}
 
 // 计算运费
 function computeFee(o) {
-    const rate = Number(exRateIn.value) || 20;
-    const fRateObj = o.fRate || (allDispatch[o.relDispatchId] ? allDispatch[o.relDispatchId].fRate : {});
+    const ts = Number(o.archivedAt) || Number(o.startTime) || Date.now();
+    const rate = rateAt(ts);
+    const dData = allDispatch[o.relDispatchId] || dispatchByOrder[o.orderId] || {};
+    const fRateObj = o.fRate || dData.fRate || {};
     const revVal = Number(fRateObj.val || o.totalFee || 0);
     const revUnit = fRateObj.unit || 'USD';
     const revenueUSD = (revUnit === 'ZMW') ? (revVal / rate) : revVal;
     const revenueZMW = revenueUSD * rate;
 
-    // 支付金额 (手动输入)
-    let paidUSD = 0;
-    if (o.paidAmount) {
-        paidUSD = (o.paidAmount.unit === 'ZMW') ? (Number(o.paidAmount.val) / rate) : Number(o.paidAmount.val);
-    }
+    const pays = paymentsOf(o);
+    const paidUSD = pays.reduce((s, p) => s + paymentUSD(p, o), 0);
 
-    // 修复：运费为 0（未读到运费）时不应判定为"已付"，避免 0>=0 误判
-    const isPaid = revenueUSD > 0 && paidUSD >= revenueUSD;
+    // 账单状态机：草稿 -> 已发出 -> 部分收款 -> 已收清
+    let status = 'draft';
+    if (revenueUSD > 0 && paidUSD >= revenueUSD - 0.01) status = 'clear';
+    else if (paidUSD > 0) status = 'partial';
+    else if (o.invoiceStatus === 'sent') status = 'sent';
+
     const dateStr = o.archivedAt ? new Date(o.archivedAt).toLocaleDateString() : '-';
     // 修复：route 优先取订单/派车单真实线路，其次用装/卸货点拼出，避免永远显示 '-'
-    const dData = allDispatch[o.relDispatchId] || {};
     let route = o.route || dData.route;
     if (!route) {
         const from = o.pickupAddr || dData.loadP;
@@ -225,7 +304,7 @@ function computeFee(o) {
         route = (from || to) ? `${from || ''} → ${to || ''}` : '-';
     }
 
-    return { revenueUSD, revenueZMW, paidUSD, isPaid, dateStr, route };
+    return { revenueUSD, revenueZMW, paidUSD, pays, status, rate, dateStr, route };
 }
 
 // 渲染表格和汇总
@@ -260,46 +339,170 @@ function render(startD = '', endD = '', custF = '', keyF = '') {
         }
     });
 
+    const STATUS_META = {
+        draft:   { cls: 'draft',   text: '未开票' },
+        sent:    { cls: 'sent',    text: '已发出' },
+        partial: { cls: 'partial', text: '部分收款' },
+        clear:   { cls: 'clear',   text: '已收清' }
+    };
+
     filteredOrders.forEach(({ id, o, fin }) => {
+        const meta = STATUS_META[fin.status] || STATUS_META.draft;
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td><b>${o.orderId || id}</b></td>
+            <td><b>${o.orderId || id}</b><br><small style="color:${o.invoiceNo ? 'var(--accent)' : '#aaa'}">${o.invoiceNo || '未开票'}</small></td>
             <td>${o.customer || '-'}</td>
             <td>${fin.route}</td>
-            <td>${fin.dateStr}</td>
-            <td style="color:var(--accent); font-weight:bold">$${fin.revenueUSD.toFixed(2)}</td>
+            <td>${fin.dateStr}<br><small style="color:#aaa">汇率 ${fin.rate.toFixed(2)}</small></td>
+            <td style="color:var(--accent); font-weight:bold">$${fin.revenueUSD.toFixed(2)}${fin.revenueUSD > 0 ? '' : '<br><small style="color:var(--c-danger);font-weight:400">未填运费</small>'}</td>
             <td>K${fin.revenueZMW.toFixed(2)}</td>
-            <td><span class="badge ${fin.isPaid ? 'badge-paid' : 'badge-unpaid'}">${fin.isPaid ? '已付' : '未付'}</span></td>
+            <td><span class="badge badge-${meta.cls}">${meta.text}</span></td>
+            <td>已收 <b>$${fin.paidUSD.toFixed(2)}</b> / $${fin.revenueUSD.toFixed(2)}
+                <br><small><a href="javascript:void(0)" onclick="openPayList('${id}')" style="color:var(--accent)">${fin.pays.length} 笔流水</a></small></td>
             <td>
-                <div class="extra-input-group">
-                    <input type="number" class="input-mini" id="pv-${id}" value="${o.paidAmount?.val || 0}">
-                    <select id="pu-${id}" style="font-size:10px">
-                        <option value="USD" ${o.paidAmount?.unit==='USD'?'selected':''}>$</option>
-                        <option value="ZMW" ${o.paidAmount?.unit==='ZMW'?'selected':''}>K</option>
-                    </select>
-                    <button class="btn-save" onclick="savePaid('${id}')">存</button>
+                <div style="display:flex;gap:4px;flex-wrap:wrap">
+                    <button class="btn" style="padding:4px 8px;font-size:10px" onclick="openPayModal('${id}')">收款</button>
+                    <button class="btn btn-pdf" style="padding:4px 8px;font-size:10px" onclick="openInvoice('${id}')">${o.invoiceNo ? '重开' : '开票'}</button>
+                    ${fin.revenueUSD > 0 ? '' : `<button class="btn" style="padding:4px 8px;font-size:10px;background:var(--c-warning)" onclick="fixRate('${id}')">补运费</button>`}
+                    <button class="btn btn-export" style="padding:4px 8px;font-size:10px" onclick="genSinglePdf('${id}')">PDF</button>
                 </div>
             </td>
-            <td><button class="btn-pdf" style="padding:4px 8px;font-size:10px" onclick="genSinglePdf('${id}')">PDF</button></td>
         `;
         tableBody.appendChild(row);
     });
 
-    summaryDiv.innerHTML = `汇总: 总运费 $${totalUSD.toFixed(2)} (K${(totalUSD * Number(exRateIn.value)).toFixed(2)}), 已付 $${totalPaidUSD.toFixed(2)}, 未付 $${(totalUSD - totalPaidUSD).toFixed(2)}`;
+    const outstanding = totalUSD - totalPaidUSD;
+    summaryDiv.innerHTML = `汇总: 总运费 $${totalUSD.toFixed(2)}（K${(totalUSD * rateAt(Date.now())).toFixed(2)}）`
+        + ` · 已收 $${totalPaidUSD.toFixed(2)} · 未收 <span style="color:${outstanding > 0.01 ? 'var(--c-danger)' : 'var(--c-success)'}">$${outstanding.toFixed(2)}</span>`
+        + ` · 订单 ${filteredOrders.length} 单`;
 }
 
-// 保存支付金额
-window.savePaid = async (id) => {
-    const val = document.getElementById(`pv-${id}`).value;
-    const unit = document.getElementById(`pu-${id}`).value;
-    try {
-        await update(ref(db, `tms/completed_orders/${id}`), {
-            paidAmount: { val: Number(val), unit: unit }
-        });
-        alert("支付信息已更新");
-        render(document.getElementById('startDate').value, document.getElementById('endDate').value, customerSelect.value, document.getElementById('keyword').value);
-    } catch(e) { alert("失败: " + e.message); }
+/* ---------------- 收款与开票 ---------------- */
+let payTargetId = null;
+
+window.openPayModal = (id) => {
+    const o = allOrders[id];
+    if (!o) return;
+    payTargetId = id;
+    const fin = computeFee(o);
+    document.getElementById('payModalSub').innerText =
+        `${o.orderId || id} · ${o.customer || '-'} · 应收 $${fin.revenueUSD.toFixed(2)} · 已收 $${fin.paidUSD.toFixed(2)}`;
+    document.getElementById('payAmount').value = Math.max(0, fin.revenueUSD - fin.paidUSD).toFixed(2);
+    document.getElementById('payCurrency').value = 'USD';
+    document.getElementById('payDate').value = TMS.util.today();
+    document.getElementById('payNote').value = '';
+    document.getElementById('payModal').classList.add('show');
 };
+
+window.closePayModal = () => {
+    document.getElementById('payModal').classList.remove('show');
+    payTargetId = null;
+};
+
+window.submitPayment = async () => {
+    if (!payTargetId) return;
+    const amount = Number(document.getElementById('payAmount').value);
+    const currency = document.getElementById('payCurrency').value;
+    const dateStr = document.getElementById('payDate').value || TMS.util.today();
+    const note = document.getElementById('payNote').value.trim();
+    if (!amount || amount <= 0) { alert('请输入收款金额'); return; }
+
+    const at = new Date(dateStr + 'T12:00:00').getTime();
+    const rate = rateAt(at);
+    const item = {
+        amount: amount,
+        currency: currency,
+        rate: rate,
+        at: at,
+        note: note,
+        by: TMS.session.name() || TMS.session.role()
+    };
+
+    // 事务追加，避免两个人同时收款互相覆盖
+    const res = await runTransaction(ref(db, 'tms/completed_orders/' + payTargetId + '/payments'), (cur) => {
+        let arr = [];
+        if (Array.isArray(cur)) arr = cur.slice();
+        else if (cur && typeof cur === 'object') arr = Object.keys(cur).map(k => cur[k]);
+        arr.push(item);
+        return arr;
+    });
+
+    if (res.committed) {
+        TMS.audit.log('登记收款', `订单 ${payTargetId}`,
+            `${amount} ${currency}（汇率 ${rate}）${note ? '｜' + note : ''}`);
+        closePayModal();
+        renderFiltered();
+    } else {
+        alert('收款登记失败，请重试');
+    }
+};
+
+window.openInvoice = async (id) => {
+    const o = allOrders[id];
+    if (!o) return;
+    const now = new Date();
+    const seq = String(Date.now()).slice(-4);
+    const invoiceNo = o.invoiceNo || `INV-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}-${seq}`;
+    if (!confirm(`确认为该订单开票并标记"已发出"？\n发票号：${invoiceNo}`)) return;
+
+    await update(ref(db, 'tms/completed_orders/' + id), {
+        invoiceNo: invoiceNo,
+        invoiceStatus: 'sent',
+        invoiceAt: Date.now(),
+        invoiceBy: TMS.session.name() || TMS.session.role()
+    });
+    TMS.audit.log('开票', `订单 ${id}`, `发票号 ${invoiceNo}`);
+    renderFiltered();
+};
+
+/* 补录运费：老订单归档时没带运费，允许管理员手工补一条 */
+window.fixRate = async (id) => {
+    const o = allOrders[id];
+    if (!o) return;
+    const input = prompt(`补录 ${o.orderId || id} 的客户运费（USD）：`, '0');
+    if (input === null) return;
+    const val = Number(input);
+    if (!val || val <= 0) { alert('请输入大于 0 的金额'); return; }
+
+    await update(ref(db, 'tms/completed_orders/' + id), {
+        fRate: { val: val, unit: 'USD' },
+        rateFixedAt: Date.now(),
+        rateFixedBy: TMS.session.name() || TMS.session.role()
+    });
+    TMS.audit.log('补录运费', `订单 ${o.orderId || id}`, `${val} USD`);
+    renderFiltered();
+};
+
+window.openPayList = (id) => {    const o = allOrders[id];
+    if (!o) return;
+    const fin = computeFee(o);
+    document.getElementById('payListSub').innerText =
+        `${o.orderId || id} · 应收 $${fin.revenueUSD.toFixed(2)} · 已收 $${fin.paidUSD.toFixed(2)} · 未收 $${(fin.revenueUSD - fin.paidUSD).toFixed(2)}`;
+
+    const body = document.getElementById('payListBody');
+    if (!fin.pays.length) {
+        body.innerHTML = '<div style="padding:16px;text-align:center;color:#999">暂无收款记录</div>';
+    } else {
+        body.innerHTML = `<table><thead><tr><th>日期</th><th>金额</th><th>汇率</th><th>折USD</th><th>备注</th></tr></thead><tbody>` +
+            fin.pays.map(p => `<tr>
+                <td>${TMS.util.ymd(p.at)}</td>
+                <td>${Number(p.amount).toFixed(2)} ${p.currency || 'USD'}</td>
+                <td>${(Number(p.rate) || rateAt(p.at)).toFixed(2)}</td>
+                <td>$${paymentUSD(p, o).toFixed(2)}</td>
+                <td>${(p.note || '-')}${p.by ? ` <small style="color:#aaa">by ${p.by}</small>` : ''}</td>
+            </tr>`).join('') + '</tbody></table>';
+    }
+    document.getElementById('payListModal').classList.add('show');
+};
+
+function renderFiltered() {
+    render(
+        document.getElementById('startDate').value,
+        document.getElementById('endDate').value,
+        customerSelect.value,
+        document.getElementById('keyword').value
+    );
+}
 
 // 生成单个订单PDF
 window.genSinglePdf = async (id) => {
@@ -354,7 +557,7 @@ async function generatePdf(orders, customer, period) {
     let totalUSD = 0;
     orders.forEach(({ o, fin }) => {
         totalUSD += fin.revenueUSD;
-        pTableBody.innerHTML += `<tr><td>${o.orderId}</td><td>${fin.route}</td><td>${fin.dateStr}</td><td>$${fin.revenueUSD.toFixed(2)}</td><td>${fin.isPaid ? 'Yes' : 'No'}</td></tr>`;
+        pTableBody.innerHTML += `<tr><td>${o.orderId}${o.invoiceNo ? '<br><small>' + o.invoiceNo + '</small>' : ''}</td><td>${fin.route}</td><td>${fin.dateStr}</td><td>$${fin.revenueUSD.toFixed(2)}</td><td>$${fin.paidUSD.toFixed(2)}</td></tr>`;
     });
     document.getElementById('p_total').innerText = `$${totalUSD.toFixed(2)}`;
     document.getElementById('p_totalLine').innerText = `Total: $${totalUSD.toFixed(2)}`;
@@ -394,6 +597,7 @@ onValue(ref(db, "tms/completed_orders"), (snapshot) => {
 
 onValue(ref(db, "tms/dispatch"), (snapshot) => {
     allDispatch = snapshot.val() || {};
+    indexDispatch();
     render();
 });
 
@@ -402,6 +606,9 @@ searchBtn.addEventListener('click', () => {
 });
 
 genPdfBtn.addEventListener('click', genPdfForCustomer);
+
+// 兜底汇率变动后重新折算（仅当没有任何历史汇率记录时才生效）
+exRateIn.addEventListener('change', renderFiltered);
 </script>
 </body>
 </html>

@@ -60,6 +60,7 @@
     </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 <link rel="stylesheet" href="assets/css/theme.css">
+<script src="assets/js/tms-core.js"></script>
 </head>
 <body>
 
@@ -195,7 +196,8 @@
     const TARGET_LOC = { lat: -15.283139, lng: 28.272167 }; 
     const RADIUS = 0.5; 
     const SECURE_KEY = 'secure';
-    const ROLE = localStorage.getItem('tms_role') || 'driver';
+    // 角色取自会话（admin/staff 才显示管理页签）；司机无需登录，走 ?access= 通道
+    const ROLE = (window.TMS && TMS.session.role) ? TMS.session.role() : 'driver';
 
     let deviceFingerprint = null;
     let currentUser = null;
@@ -280,7 +282,7 @@
 
     window.doPunch = async (type) => {
         if(!canPunch) return alert("不在考勤范围内！");
-        const today = new Date().toISOString().split('T')[0];
+        const today = (window.TMS ? TMS.util.today() : new Date().toISOString().split('T')[0]);
         const nowTime = new Date().toLocaleTimeString('en-GB', {hour12:false});
         const logPath = `tms/attendance/logs/${today}/${currentUser.eid}`;
         const snap = await get(ref(db, logPath));
@@ -299,7 +301,7 @@
     };
 
     function loadToday() {
-        const today = new Date().toISOString().split('T')[0];
+        const today = (window.TMS ? TMS.util.today() : new Date().toISOString().split('T')[0]);
         onValue(ref(db, `tms/attendance/logs/${today}`), (snap) => {
             const tbody = document.getElementById('todayTableBody');
             tbody.innerHTML = "";
