@@ -76,7 +76,15 @@ TMS.session.requireLogin();
 
 <div style="position:fixed;top:15px;left:15px;z-index:999;">
   <button onclick="window.location.href='index.html'">返回主页面</button>
+  <button id="btnTimeliness" style="display:none" onclick="window.location.href='timeliness.html'">时效统计</button>
 </div>
+<script>
+// 时效统计为管理员视角（司机/车辆考核），员工与访客不显示入口
+if (TMS.session.isAdmin()) {
+  var tlBtn = document.getElementById('btnTimeliness');
+  if (tlBtn) tlBtn.style.display = 'inline-block';
+}
+</script>
 
 <div class="header"><h2 id="headerTitle">动态监控</h2><div id="headerSub" style="font-size:13px">按客户分组，实时监控车辆状态与计时</div></div>
 <div class="container" id="app">

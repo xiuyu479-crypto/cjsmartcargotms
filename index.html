@@ -229,6 +229,10 @@ TMS.session.requireLogin();
         <i class="bi bi-journal-text card-icon"></i>
         修改记录
     </div>
+    <div class="card" onclick="go('timeliness.html')" id="btnTimeliness">
+        <i class="bi bi-stopwatch card-icon"></i>
+        时效统计
+    </div>
 </div>
 
 <script>
@@ -250,9 +254,9 @@ function go(url){
     }
 
     // 员工 (staff)：财务模块(fleetcost)允许进入 —— 页面内会再要求输入"财务密码"做二次验证，
-    // 用密码区分普通员工与财务人员；客户账单(billing)、司机结算、毛利分析、修改记录仍仅限管理员。
+    // 用密码区分普通员工与财务人员；客户账单(billing)、司机结算、毛利分析、修改记录、时效统计仍仅限管理员。
     if (role === 'staff') {
-        const adminOnly = ['billing.html', 'settlement.html', 'profit.html', 'audit.html'];
+        const adminOnly = ['billing.html', 'settlement.html', 'profit.html', 'audit.html', 'timeliness.html'];
         if (adminOnly.includes(url)) {
             alert(currentLang === "zh" ? "权限不足：仅限管理员访问。" : "Access Denied: Admin only.");
             return;
@@ -262,7 +266,8 @@ function go(url){
     // 访客 (viewer) 权限拦截：不能进 新建订单、费用统计、客户账单、客户信息、各类财务报表
     if (role === 'viewer') {
         const restricted = ['neworders.html', 'fleetcost.html', 'billing.html', 'clients.html',
-                            'finreport.html', 'settlement.html', 'profit.html', 'audit.html'];
+                            'finreport.html', 'settlement.html', 'profit.html', 'audit.html',
+                            'timeliness.html'];
         if (restricted.includes(url)) {
             alert(currentLang === "zh" ? "权限不足：访客无法访问此功能。" : "Access Denied: Restricted for viewers.");
             return;
@@ -282,6 +287,8 @@ function applyRoleUI(){
     if (settleCard && role !== 'admin') settleCard.style.display = 'none';
     const profitCard = document.getElementById('btnProfit');
     if (profitCard && role !== 'admin') profitCard.style.display = 'none';
+    const timelinessCard = document.getElementById('btnTimeliness');
+    if (timelinessCard && role !== 'admin') timelinessCard.style.display = 'none';
 }
 
 const langPack = {
@@ -303,7 +310,8 @@ const langPack = {
         btnFinReport: "费用统计报表",
         btnSettle: "司机结算",
         btnProfit: "单车毛利分析",
-        btnAudit: "修改记录"
+        btnAudit: "修改记录",
+        btnTimeliness: "时效统计"
     },
     en:{
         langLabel:"中文",
@@ -323,7 +331,8 @@ const langPack = {
         btnFinReport: "Cost Report",
         btnSettle: "Driver Settlement",
         btnProfit: "Margin Analysis",
-        btnAudit: "Audit Log"
+        btnAudit: "Audit Log",
+        btnTimeliness: "Timeliness"
     }
 };
 
@@ -354,6 +363,7 @@ function applyLang(){
     updateCard("btnSettle", t.btnSettle, "wallet2");
     updateCard("btnProfit", t.btnProfit, "pie-chart");
     updateCard("btnAudit", t.btnAudit, "journal-text");
+    updateCard("btnTimeliness", t.btnTimeliness, "stopwatch");
 
     applyRoleUI();
 

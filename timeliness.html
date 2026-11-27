@@ -1,0 +1,1266 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>时效统计 - TMS</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="stylesheet" href="assets/css/theme.css">
+<link rel="stylesheet" href="assets/css/report.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="assets/js/tms-core.js"></script>
+<script>
+// 时效统计：仅管理员（司机/车辆考核依据，不对员工与访客开放）
+TMS.session.requireRole(['admin']);
+</script>
+<style>
+/* 页内业务布局，视觉继承 theme.css / report.css */
+.tl-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.tl-tab{padding:7px 14px;border-radius:var(--r-pill);border:1px solid var(--c-border-strong);background:#fff;
+    color:var(--c-text-body);font-size:13px;font-weight:600;cursor:pointer}
+.tl-tab:hover{background:var(--c-surface-2)}
+.tl-tab.active{background:var(--c-primary);border-color:var(--c-primary);color:#fff}
+
+.tl-table-wrap{background:var(--c-surface);border:1px solid var(--c-border);border-radius:var(--r-lg);overflow:auto;max-height:640px;box-shadow:var(--sh-1)}
+.tl-table{width:100%;border-collapse:collapse;font-size:13px;min-width:1180px}
+.tl-table th{background:var(--c-surface-2);text-align:left;padding:9px 10px;color:var(--c-text-muted);
+    font-weight:600;font-size:12px;white-space:nowrap;border-bottom:1px solid var(--c-border);position:sticky;top:0;z-index:2}
+.tl-table th.sortable{cursor:pointer;user-select:none}
+.tl-table th.sortable:hover{color:var(--c-primary)}
+.tl-table th .arw{font-size:10px;color:var(--c-text-faint);margin-left:2px}
+.tl-table th.on .arw{color:var(--c-primary)}
+.tl-table td{padding:9px 10px;border-bottom:1px solid var(--c-divider);vertical-align:top}
+.tl-table tbody tr:hover{background:#fbfcfe}
+.tl-table .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tl-table .name{font-weight:600;color:var(--c-text)}
+.tl-table .sub{font-size:11px;color:var(--c-text-faint);font-weight:400}
+
+.tl-grade{display:inline-block;min-width:26px;text-align:center;padding:1px 7px;border-radius:var(--r-pill);
+    font-size:11px;font-weight:700;border:1px solid transparent}
+.tl-grade.A{background:var(--c-success-soft);color:var(--c-success);border-color:#bfe7d8}
+.tl-grade.B{background:var(--c-primary-soft);color:var(--c-primary);border-color:var(--c-primary-soft-border)}
+.tl-grade.C{background:var(--c-warning-soft);color:var(--c-warning);border-color:#f6dfb8}
+.tl-grade.D{background:var(--c-danger-soft);color:var(--c-danger);border-color:#fbd5d1}
+
+.tl-bad{color:var(--c-danger);font-weight:700}
+.tl-ok{color:var(--c-success);font-weight:700}
+.tl-muted{color:var(--c-text-faint)}
+.tl-toggle{cursor:pointer;color:var(--c-primary);font-weight:700;white-space:nowrap;user-select:none}
+
+/* 订单展开后的节点明细 */
+.tl-node-wrap{background:#fbfcfe;border:1px solid var(--c-border);border-radius:var(--r);padding:10px}
+.tl-node-title{font-size:12px;font-weight:700;color:var(--c-text);margin-bottom:8px;display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.tl-nodes{width:100%;border-collapse:collapse;font-size:12px}
+.tl-nodes th{background:#fff;color:var(--c-text-muted);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--c-border);text-align:left;white-space:nowrap;position:static}
+.tl-nodes td{padding:6px 8px;border-bottom:1px dashed var(--c-divider)}
+.tl-nodes .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tl-nodes a{color:var(--c-primary);text-decoration:underline}
+.tl-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:middle}
+.tl-dot.run{background:var(--c-warning)}
+.tl-dot.done{background:var(--c-success)}
+
+/* 阈值设置弹窗 */
+.tl-modal{display:none;position:fixed;inset:0;background:rgba(16,24,40,.45);z-index:2000;align-items:center;justify-content:center;padding:20px}
+.tl-modal.show{display:flex}
+.tl-modal-box{background:#fff;border-radius:var(--r-lg);width:100%;max-width:560px;max-height:86vh;overflow:auto;box-shadow:var(--sh-3)}
+.tl-modal-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--c-border)}
+.tl-modal-head b{font-size:15px;color:var(--c-text)}
+.tl-modal-body{padding:14px 16px}
+.tl-modal-foot{display:flex;gap:10px;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--c-border)}
+.tl-sla-row{display:grid;grid-template-columns:1fr 110px;gap:10px;align-items:center;padding:6px 0;border-bottom:1px dashed var(--c-divider)}
+.tl-sla-row label{font-size:13px;color:var(--c-text-body)}
+.tl-sla-row input{padding:6px 8px;border:1px solid var(--c-border-strong);border-radius:var(--r);font-size:13px;width:100%;box-sizing:border-box;text-align:right}
+.tl-x{background:none;border:none;font-size:20px;line-height:1;color:var(--c-text-muted);cursor:pointer}
+@media (max-width:720px){ .tl-table{min-width:980px} }
+</style>
+</head>
+<body>
+
+<div class="rp-bar">
+    <h1><i class="bi bi-stopwatch"></i> 时效统计 <span class="sub">节点时效 · 司机 / 车辆考核依据</span></h1>
+    <div class="spacer"></div>
+    <button class="rp-btn ghost" id="btnSla"><i class="bi bi-sliders"></i> 时效阈值</button>
+    <button class="rp-btn ghost" onclick="location.href='dynamic.html'"><i class="bi bi-speedometer2"></i> 动态监控</button>
+    <button class="rp-btn ghost" onclick="location.href='completed.html'"><i class="bi bi-file-earmark-text"></i> 已完成订单</button>
+    <button class="rp-btn ghost" onclick="location.href='index.html'"><i class="bi bi-arrow-left"></i> 返回主页</button>
+</div>
+
+<div class="rp-wrap">
+
+    <div class="rp-card">
+        <div class="rp-filters">
+            <div><label>开始日期</label><input type="date" id="fFrom"></div>
+            <div><label>结束日期</label><input type="date" id="fTo"></div>
+            <div><label>客户</label><select id="fCustomer"><option value="">全部</option></select></div>
+            <div><label>司机</label><select id="fDriver"><option value="">全部</option></select></div>
+            <div><label>车辆</label><select id="fPlate"><option value="">全部</option></select></div>
+            <div><label>订单类型</label>
+                <select id="fType">
+                    <option value="">全部</option>
+                    <option value="cross_border">跨境</option>
+                    <option value="domestic">境内</option>
+                </select>
+            </div>
+            <div><label>订单状态</label>
+                <select id="fStatus">
+                    <option value="archived" selected>已归档（考核口径）</option>
+                    <option value="live">进行中</option>
+                    <option value="">全部</option>
+                </select>
+            </div>
+            <button class="rp-btn" id="btnApply"><i class="bi bi-funnel"></i> 刷新统计</button>
+            <button class="rp-btn ghost" onclick="quick('all')">全部</button>
+            <button class="rp-btn ghost" onclick="quick('month')">本月</button>
+            <button class="rp-btn ghost" onclick="quick('last30')">近 30 天</button>
+            <button class="rp-btn ghost" onclick="quick('year')">本年</button>
+            <button class="rp-btn ghost" id="btnExport"><i class="bi bi-download"></i> 导出明细</button>
+            <button class="rp-btn ghost" id="btnExportSum"><i class="bi bi-file-earmark-spreadsheet"></i> 导出考核表</button>
+        </div>
+        <div class="rp-note" style="margin:12px 0 0">
+            口径：节点耗时取自订单 <b>durations</b>（司机端 / 动态监控滑动确认时累计）与 <b>statusTimestamps</b>（各节点进入时间、经纬度）；
+            进行中订单的当前节点按"进入时间 → 现在"实时计入。全流程 = 归档时间 − 派车时间，作业时效 = 各节点耗时之和。
+            车辆取订单 <b>tractor</b>，司机取订单 <b>driver</b>（按姓名归一化合并大小写 / 空格差异）。
+            考核默认只看<b>已归档</b>闭环订单（进行中订单会随"现在"一直累加，长期未归档会推高全流程）；看实时节点请把「订单状态」切到<b>进行中</b>。
+        </div>
+    </div>
+
+    <div class="rp-kpis">
+        <div class="rp-kpi"><div class="k">纳入统计订单</div><div class="v" id="kOrders">0</div><div class="t" id="kOrdersT">-</div></div>
+        <div class="rp-kpi"><div class="k">平均全流程</div><div class="v" id="kCycle">-</div><div class="t">派车 → 归档</div></div>
+        <div class="rp-kpi"><div class="k">平均作业时效</div><div class="v" id="kWork">-</div><div class="t">各节点耗时合计</div></div>
+        <div class="rp-kpi"><div class="k">节点准时率</div><div class="v" id="kOnTime">-</div><div class="t" id="kOnTimeT">-</div></div>
+        <div class="rp-kpi"><div class="k">超时节点</div><div class="v" id="kOverdue">0</div><div class="t" id="kOverdueT">-</div></div>
+        <div class="rp-kpi"><div class="k">异常订单</div><div class="v" id="kIssue">0</div><div class="t" id="kIssueT">-</div></div>
+    </div>
+
+    <div class="rp-card">
+        <h2><i class="bi bi-bar-chart"></i> 各节点平均耗时（对比时效阈值）</h2>
+        <div class="rp-chart"><canvas id="cNodes"></canvas></div>
+    </div>
+
+    <div class="rp-card">
+        <h2><i class="bi bi-graph-up"></i> 月度趋势（已归档订单 · 订单量 / 平均全流程）</h2>
+        <div class="rp-chart"><canvas id="cTrend"></canvas></div>
+    </div>
+
+    <div class="rp-grid-2">
+        <div class="rp-card">
+            <h2><i class="bi bi-person-badge"></i> 按司机 · 平均全流程时效</h2>
+            <div class="rp-chart sm"><canvas id="cDriver"></canvas></div>
+        </div>
+        <div class="rp-card">
+            <h2><i class="bi bi-truck"></i> 按车辆 · 平均全流程时效</h2>
+            <div class="rp-chart sm"><canvas id="cVehicle"></canvas></div>
+        </div>
+    </div>
+
+    <div class="rp-card">
+        <h2><i class="bi bi-people"></i> 按客户 · 平均全流程时效</h2>
+        <div class="rp-chart sm"><canvas id="cCustomer"></canvas></div>
+    </div>
+
+    <div class="rp-card">
+        <div class="tl-tabs">
+            <button class="tl-tab active" data-tab="order"><i class="bi bi-list-ul"></i> 订单明细</button>
+            <button class="tl-tab" data-tab="driver"><i class="bi bi-person-badge"></i> 按司机</button>
+            <button class="tl-tab" data-tab="vehicle"><i class="bi bi-truck"></i> 按车辆</button>
+            <button class="tl-tab" data-tab="customer"><i class="bi bi-people"></i> 按客户</button>
+        </div>
+
+        <div id="pane-order" class="tl-pane">
+            <div class="tl-table-wrap">
+                <table class="tl-table">
+                    <thead>
+                        <tr>
+                            <th style="width:34px"></th>
+                            <th class="sortable" data-k="orderNo">订单号<span class="arw">↕</span></th>
+                            <th class="sortable" data-k="customer">客户<span class="arw">↕</span></th>
+                            <th class="sortable" data-k="driver">司机<span class="arw">↕</span></th>
+                            <th class="sortable" data-k="plate">车辆<span class="arw">↕</span></th>
+                            <th>类型</th>
+                            <th class="sortable" data-k="endAt">完成 / 更新<span class="arw">↕</span></th>
+                            <th class="sortable num" data-k="cycle">全流程<span class="arw">↕</span></th>
+                            <th class="sortable num" data-k="work">作业时效<span class="arw">↕</span></th>
+                            <th class="sortable num" data-k="overdueN">超时节点<span class="arw">↕</span></th>
+                            <th class="sortable num" data-k="issueCount">异常<span class="arw">↕</span></th>
+                            <th class="sortable num" data-k="score">考核分<span class="arw">↕</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbOrder">
+                        <tr><td colspan="12" class="rp-empty">正在同步云端订单数据...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="pane-driver" class="tl-pane" style="display:none">
+            <div class="tl-table-wrap">
+                <table class="tl-table">
+                    <thead><tr id="thDriver"></tr></thead>
+                    <tbody id="tbDriver"><tr><td colspan="13" class="rp-empty">加载中...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="pane-vehicle" class="tl-pane" style="display:none">
+            <div class="tl-table-wrap">
+                <table class="tl-table">
+                    <thead><tr id="thVehicle"></tr></thead>
+                    <tbody id="tbVehicle"><tr><td colspan="13" class="rp-empty">加载中...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="pane-customer" class="tl-pane" style="display:none">
+            <div class="tl-table-wrap">
+                <table class="tl-table">
+                    <thead><tr id="thCustomer"></tr></thead>
+                    <tbody id="tbCustomer"><tr><td colspan="13" class="rp-empty">加载中...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="rp-note" style="margin:12px 0 0">
+            考核分 = 100 ×（70% × 节点准时率 + 30% ×（1 − 异常单占比）），等级 A≥90 / B≥80 / C≥70 / D&lt;70。
+            准时率只按"已计量节点"计算，未记录时效的节点不参与（旧订单可能缺记录）。司机 / 车辆表默认按考核分升序，需要关注的对象排在最前。
+            时效数值：&lt; 48 小时按 <b>h</b> 显示，≥ 48 小时折算为<b>天</b>（各表同口径，导出 CSV 一律为小时）。
+        </div>
+    </div>
+
+</div>
+
+<!-- 时效阈值设置 -->
+<div class="tl-modal" id="slaModal">
+    <div class="tl-modal-box">
+        <div class="tl-modal-head">
+            <b><i class="bi bi-sliders"></i> 时效阈值设置（小时）</b>
+            <button class="tl-x" id="slaClose">&times;</button>
+        </div>
+        <div class="tl-modal-body">
+            <div class="rp-note" style="margin-bottom:10px">
+                阈值用于判断节点"是否超时"，保存到云端 <code>tms/timeliness/sla</code>，全员同一套标准。
+                默认值参考历史数据 P75 制定（即约 3/4 的节点可判准时），可按实际线路调整。
+            </div>
+            <div id="slaRows"></div>
+        </div>
+        <div class="tl-modal-foot">
+            <button class="rp-btn ghost" id="slaReset">恢复默认</button>
+            <button class="rp-btn ghost" id="slaCancel">取消</button>
+            <button class="rp-btn" id="slaSave"><i class="bi bi-check2"></i> 保存</button>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-app.js";
+import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.11.1/firebase-database.js";
+
+const firebaseConfig = {
+    apiKey: "AIzaSyDEbePpsrXwD8Okqa93UOGUFE37c8SFHS0",
+    authDomain: "cjsmartcargo-datebase.firebaseapp.com",
+    databaseURL: "https://cjsmartcargo-datebase-default-rtdb.firebaseio.com",
+    projectId: "cjsmartcargo-datebase",
+    storageBucket: "cjsmartcargo-datebase.firebasestorage.app"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+// 审计：与其它页面一致，写 tms/audit_logs
+TMS.audit.bind(p => set(ref(db, 'tms/audit_logs/' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)), p));
+
+const esc = TMS.util.esc;
+
+/* ------------------------------------------------------------------
+   1. 节点定义（key 与 dynamic.html / report.html 的流程完全对齐）
+   ------------------------------------------------------------------ */
+const FLOWS = {
+    cross_border: ['confirmed', 'arrived_pickup', 'loaded', 'documents_ready',
+        'arrived_border', 'cleared_border', 'crossed_border', 'arrived_dropoff', 'unloaded'],
+    domestic: ['confirmed', 'arrived_pickup', 'loaded', 'released',
+        'arrived_dropoff', 'unloaded']
+};
+
+const NODE_META = {
+    confirmed:       { zh: '前往装货',        sla: 48 },
+    arrived_pickup:  { zh: '装货等待',        sla: 48 },
+    loaded:          { zh: '装货完成/待文件',  sla: 48 },
+    documents_ready: { zh: '在途（含等文件）', sla: 36 },
+    released:        { zh: '放行/前往卸货',    sla: 24 },
+    arrived_border:  { zh: '边境清关',        sla: 72 },
+    cleared_border:  { zh: '过境',            sla: 48 },
+    crossed_border:  { zh: '过境后运输',      sla: 96 },
+    arrived_dropoff: { zh: '卸货等待',        sla: 48 },
+    unloaded:        { zh: '卸货完成',        sla: 12 }
+};
+const NODE_KEYS = Object.keys(NODE_META);
+
+// 阶段归并（维度表横向对比用）
+const PHASES = {
+    wait:   ['confirmed'],
+    load:   ['arrived_pickup', 'loaded'],
+    transit: ['documents_ready', 'released'],
+    border: ['arrived_border', 'cleared_border', 'crossed_border'],
+    unload: ['arrived_dropoff', 'unloaded']
+};
+
+/* ------------------------------------------------------------------
+   2. 状态
+   ------------------------------------------------------------------ */
+let RAW = { live: {}, archived: {} };
+let RECORDS = [];
+let VIEW = [];
+let DRIVER_DIR = {};
+let SLA = {};
+const EXPANDED = new Set();
+const SORT = {
+    order: { k: 'endAt', dir: -1 },
+    driver: { k: 'score', dir: 1 },
+    vehicle: { k: 'score', dir: 1 },
+    customer: { k: 'score', dir: 1 }
+};
+
+/* ------------------------------------------------------------------
+   3. 工具
+   ------------------------------------------------------------------ */
+function normName(s) {
+    return String(s === null || s === undefined ? '' : s).trim().replace(/\s+/g, ' ').toUpperCase();
+}
+function clean(s) {
+    return String(s === null || s === undefined ? '' : s).trim().replace(/\s+/g, ' ');
+}
+function slaMs(k) { return (Number(SLA[k]) || NODE_META[k].sla) * 3600000; }
+
+function fmtDur(ms) {
+    if (ms === null || ms === undefined || !isFinite(ms) || ms <= 0) return '—';
+    const h = ms / 3600000;
+    if (h < 1) return Math.max(1, Math.round(h * 60)) + 'm';
+    if (h < 48) return h.toFixed(1) + 'h';
+    return (h / 24).toFixed(1) + '天';
+}
+function fmtH(h) {
+    if (h === null || h === undefined || !isFinite(h) || h <= 0) return '—';
+    if (h < 48) return h.toFixed(1) + 'h';
+    return (h / 24).toFixed(1) + '天';
+}
+function pct(v) {
+    if (v === null || v === undefined || !isFinite(v)) return '—';
+    return (v * 100).toFixed(0) + '%';
+}
+function gradeOf(score) {
+    if (score === null || score === undefined) return null;
+    if (score >= 90) return 'A';
+    if (score >= 80) return 'B';
+    if (score >= 70) return 'C';
+    return 'D';
+}
+function gradeTag(g) {
+    return g ? '<span class="tl-grade ' + g + '">' + g + '</span>' : '<span class="tl-muted">—</span>';
+}
+function scoreCell(score) {
+    if (score === null || score === undefined) return '<span class="tl-muted">—</span>';
+    const cls = score >= 80 ? 'tl-ok' : (score >= 70 ? '' : 'tl-bad');
+    return '<span class="' + cls + '">' + score.toFixed(1) + '</span>';
+}
+function issuesOf(o) {
+    const raw = o.issues;
+    if (!raw) return [];
+    return Array.isArray(raw) ? raw.filter(Boolean) : Object.values(raw).filter(Boolean);
+}
+
+/* ------------------------------------------------------------------
+   4. 订单归一化
+   ------------------------------------------------------------------ */
+function normalizeOrder(id, o, archived) {
+    const type = o.orderType === 'domestic' ? 'domestic' : 'cross_border';
+    const flow = FLOWS[type];
+    const ts = o.statusTimestamps || {};
+    const dur = o.durations || {};
+
+    const now = Date.now();
+    const archivedAt = Number(o.archivedAt) || 0;
+    const closedAt = archived ? (archivedAt || now) : now;
+
+    const nodes = flow.map(key => {
+        const rec = ts[key] || {};
+        const running = !!(rec.start && !rec.end);
+        let ms = Number(dur[key]) || 0;
+        if (running) ms += Math.max(0, closedAt - Number(rec.start));
+
+        const endAt = Number(rec.end) || (rec.start ? closedAt : 0);
+        const startAt = Number(rec.startedAt) || Number(rec.start) ||
+            (endAt && ms > 0 ? endAt - ms : 0);
+
+        const lat = Number(rec.lat !== undefined ? rec.lat : rec.endLat);
+        const lng = Number(rec.lng !== undefined ? rec.lng : rec.endLng);
+        const hasLoc = isFinite(lat) && isFinite(lng) && !(lat === 0 && lng === 0);
+
+        return {
+            key: key, label: NODE_META[key].zh, ms: ms, running: running,
+            startAt: startAt, endAt: endAt, lat: lat, lng: lng, hasLoc: hasLoc
+        };
+    });
+
+    const firstNodeAt = nodes.reduce((m, n) => (n.startAt && (!m || n.startAt < m) ? n.startAt : m), 0);
+    const startTs = Number(o.startTime) || Number(o.createdAt) || firstNodeAt || 0;
+    const endTs = archived ? (archivedAt || firstNodeAt || now) : now;
+
+    const measured = nodes.filter(n => n.ms > 0);
+    const overdue = measured.filter(n => n.ms > slaMs(n.key));
+
+    const phase = { wait: 0, load: 0, transit: 0, border: 0, unload: 0 };
+    Object.keys(PHASES).forEach(ph => {
+        phase[ph] = PHASES[ph].reduce((s, k) => {
+            const n = nodes.find(x => x.key === k);
+            return s + (n && n.ms > 0 ? n.ms : 0);
+        }, 0);
+    });
+
+    const work = measured.reduce((s, n) => s + n.ms, 0);
+    const issues = issuesOf(o);
+    const onTime = measured.length ? 1 - overdue.length / measured.length : null;
+    const score = onTime === null ? null : 100 * (0.7 * onTime + 0.3 * (issues.length ? 0 : 1));
+
+    return {
+        id: id,
+        orderNo: o.orderId || id,
+        customer: clean(o.customer) || '未填写客户',
+        customerKey: normName(o.customer) || '未填写客户',
+        driver: clean(o.driver) || '未填写司机',
+        driverKey: normName(o.driver) || '未填写司机',
+        plate: clean(o.tractor || o.plate) || '未填写车辆',
+        plateKey: normName(o.tractor || o.plate) || '未填写车辆',
+        trailer: clean(o.trailer),
+        type: type,
+        archived: archived,
+        statusText: archived ? '已归档' : '进行中',
+        startTs: startTs,
+        endAt: endTs,
+        cycle: startTs && endTs > startTs ? endTs - startTs : 0,
+        work: work,
+        phase: phase,
+        nodes: nodes,
+        measuredCount: measured.length,
+        overdueNodes: overdue,
+        overdueN: overdue.length,
+        issues: issues,
+        issueCount: issues.length,
+        onTime: onTime,
+        score: score
+    };
+}
+
+/* ------------------------------------------------------------------
+   5. 维度聚合
+   ------------------------------------------------------------------ */
+function aggregate(rows, keyField, nameField) {
+    const map = new Map();
+
+    rows.forEach(r => {
+        const k = r[keyField];
+        let g = map.get(k);
+        if (!g) {
+            g = {
+                key: k, name: r[nameField], orders: 0,
+                cycleSum: 0, cycleN: 0, workSum: 0,
+                phase: { wait: 0, load: 0, transit: 0, border: 0, unload: 0 },
+                measured: 0, overdue: 0, issueOrders: 0, issueCount: 0, issues: 0
+            };
+            map.set(k, g);
+        }
+        g.orders++;
+        if (r.cycle > 0) { g.cycleSum += r.cycle; g.cycleN++; }
+        g.workSum += r.work;
+        Object.keys(g.phase).forEach(ph => { g.phase[ph] += r.phase[ph]; });
+        r.nodes.forEach(n => {
+            if (!(n.ms > 0)) return;
+            g.measured++;
+            if (n.ms > slaMs(n.key)) g.overdue++;
+        });
+        if (r.issueCount) { g.issueOrders++; g.issueCount += r.issueCount; g.issues += r.issueCount; }
+    });
+
+    const out = [];
+    map.forEach(g => {
+        g.cycleAvg = g.cycleN ? g.cycleSum / g.cycleN / 3600000 : null;
+        g.workAvg = g.orders ? g.workSum / g.orders / 3600000 : null;
+        g.phaseAvg = {};
+        Object.keys(g.phase).forEach(ph => {
+            g.phaseAvg[ph] = g.orders ? g.phase[ph] / g.orders / 3600000 : null;
+        });
+        g.onTime = g.measured ? 1 - g.overdue / g.measured : null;
+        g.issueRate = g.orders ? g.issueOrders / g.orders : 0;
+        g.score = g.onTime === null ? null : 100 * (0.7 * g.onTime + 0.3 * (1 - g.issueRate));
+        g.grade = gradeOf(g.score);
+        out.push(g);
+    });
+    return out;
+}
+
+/* ------------------------------------------------------------------
+   6. 过滤
+   ------------------------------------------------------------------ */
+function filterRows() {
+    const from = document.getElementById('fFrom').value;
+    const to = document.getElementById('fTo').value;
+    const cus = document.getElementById('fCustomer').value;
+    const drv = document.getElementById('fDriver').value;
+    const plate = document.getElementById('fPlate').value;
+    const type = document.getElementById('fType').value;
+    const status = document.getElementById('fStatus').value;
+
+    return RECORDS.filter(r => {
+        const day = TMS.util.ymd(r.endAt);
+        if (from && day < from) return false;
+        if (to && day > to) return false;
+        if (cus && r.customerKey !== cus) return false;
+        if (drv && r.driverKey !== drv) return false;
+        if (plate && r.plateKey !== plate) return false;
+        if (type && r.type !== type) return false;
+        if (status === 'archived' && !r.archived) return false;
+        if (status === 'live' && r.archived) return false;
+        return true;
+    });
+}
+
+/* ------------------------------------------------------------------
+   7. KPI
+   ------------------------------------------------------------------ */
+function renderKpi(rows) {
+    const total = rows.length;
+    const withCycle = rows.filter(r => r.cycle > 0);
+    const cycleAvg = withCycle.length
+        ? withCycle.reduce((s, r) => s + r.cycle, 0) / withCycle.length : null;
+    const workAvg = total ? rows.reduce((s, r) => s + r.work, 0) / total : null;
+
+    let measured = 0, overdue = 0;
+    rows.forEach(r => {
+        r.nodes.forEach(n => {
+            if (!(n.ms > 0)) return;
+            measured++;
+            if (n.ms > slaMs(n.key)) overdue++;
+        });
+    });
+    const onTime = measured ? 1 - overdue / measured : null;
+    const issueOrders = rows.filter(r => r.issueCount > 0).length;
+    const issueRows = rows.reduce((s, r) => s + r.issueCount, 0);
+    const archived = rows.filter(r => r.archived).length;
+
+    document.getElementById('kOrders').textContent = total;
+    document.getElementById('kOrdersT').textContent = '已归档 ' + archived + ' 单' +
+        (total - archived ? ' · 进行中 ' + (total - archived) : '');
+    // cycleAvg / workAvg 均为毫秒，交给 fmtDur 统一换算
+    document.getElementById('kCycle').textContent = fmtDur(cycleAvg);
+    document.getElementById('kWork').textContent = fmtDur(workAvg);
+    document.getElementById('kOnTime').textContent = onTime === null ? '—' : pct(onTime);
+    document.getElementById('kOnTimeT').textContent = measured ? measured + ' 个节点计量' : '暂无节点数据';
+    document.getElementById('kOverdue').textContent = overdue;
+    document.getElementById('kOverdueT').textContent = measured ? '占 ' + pct(overdue / measured) : '-';
+    document.getElementById('kIssue').textContent = issueOrders;
+    document.getElementById('kIssueT').textContent = '共 ' + issueRows + ' 条异常记录';
+}
+
+/* ------------------------------------------------------------------
+   8. 图表
+   ------------------------------------------------------------------ */
+const charts = {};
+const PALETTE = ['#1e63d8', '#4b8bf0', '#7aa9f5', '#12805c', '#b45309', '#8b5cf6', '#94a3b8'];
+
+function chartReady() { return typeof Chart !== 'undefined'; }
+
+function destroyChart(name) {
+    if (charts[name]) { charts[name].destroy(); delete charts[name]; }
+}
+
+function drawNodeChart(rows) {
+    if (!chartReady()) return;
+    const stat = {};
+    rows.forEach(r => {
+        r.nodes.forEach(n => {
+            if (!(n.ms > 0)) return;
+            if (!stat[n.key]) stat[n.key] = { sum: 0, n: 0 };
+            stat[n.key].sum += n.ms;
+            stat[n.key].n++;
+        });
+    });
+
+    const keys = NODE_KEYS.filter(k => stat[k]);
+    const avg = keys.map(k => +(stat[k].sum / stat[k].n / 3600000).toFixed(2));
+    const limits = keys.map(k => Number(SLA[k]) || NODE_META[k].sla);
+
+    destroyChart('nodes');
+    charts.nodes = new Chart(document.getElementById('cNodes'), {
+        type: 'bar',
+        data: {
+            labels: keys.map(k => NODE_META[k].zh),
+            datasets: [
+                { label: '平均耗时 (h)', data: avg, backgroundColor: '#1e63d8', borderRadius: 4, order: 2 },
+                {
+                    label: '时效阈值 (h)', data: limits, type: 'line', borderColor: '#d92d20',
+                    backgroundColor: 'rgba(217,45,32,.08)', borderWidth: 2, pointRadius: 3,
+                    pointBackgroundColor: '#d92d20', fill: false, order: 1
+                }
+            ]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom' },
+                tooltip: {
+                    callbacks: {
+                        label: c => c.dataset.label + ': ' + c.parsed.x + ' h'
+                    }
+                }
+            },
+            scales: {
+                x: { beginAtZero: true, grid: { color: '#f0f1f4' }, title: { display: true, text: '小时', font: { size: 11 } } },
+                y: { grid: { display: false } }
+            }
+        }
+    });
+}
+
+function drawTrend(rows) {
+    if (!chartReady()) return;
+    const months = [];
+    const now = new Date();
+    for (let i = 11; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        months.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
+    }
+    // 趋势只看已闭环（已归档）订单：进行中订单的 endAt 是"现在"，会把当月拉成异常尖峰
+    const closed = rows.filter(r => r.archived);
+    const cnt = {}, sum = {}, num = {};
+    closed.forEach(r => {
+        const m = TMS.util.ym(r.endAt);
+        cnt[m] = (cnt[m] || 0) + 1;
+        if (r.cycle > 0) { sum[m] = (sum[m] || 0) + r.cycle; num[m] = (num[m] || 0) + 1; }
+    });
+
+    destroyChart('trend');
+    charts.trend = new Chart(document.getElementById('cTrend'), {
+        data: {
+            labels: months,
+            datasets: [
+                { type: 'bar', label: '订单数', data: months.map(m => cnt[m] || 0), backgroundColor: '#9dbcf5', borderRadius: 4, yAxisID: 'y' },
+                {
+                    type: 'line', label: '平均全流程 (h)', data: months.map(m => num[m] ? +(sum[m] / num[m] / 3600000).toFixed(2) : null),
+                    borderColor: '#1e63d8', backgroundColor: '#1e63d8', borderWidth: 2, pointRadius: 3,
+                    tension: .3, spanGaps: true, yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom' } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: '#f0f1f4' }, title: { display: true, text: '订单数', font: { size: 11 } } },
+                y1: {
+                    beginAtZero: true, position: 'right', grid: { display: false },
+                    title: { display: true, text: '小时', font: { size: 11 } }
+                },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+}
+
+function drawDimChart(name, canvasId, groups, label) {
+    if (!chartReady()) return;
+    const list = groups
+        .filter(g => g.cycleAvg !== null)
+        .sort((a, b) => b.cycleAvg - a.cycleAvg)
+        .slice(0, 12);
+
+    destroyChart(name);
+    charts[name] = new Chart(document.getElementById(canvasId), {
+        type: 'bar',
+        data: {
+            labels: list.map(g => g.name.length > 18 ? g.name.slice(0, 18) + '…' : g.name),
+            datasets: [{
+                label: '平均全流程 (h)',
+                data: list.map(g => +g.cycleAvg.toFixed(2)),
+                backgroundColor: list.map(g => (g.score !== null && g.score < 70) ? '#d92d20' : '#1e63d8'),
+                borderRadius: 4
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: c => {
+                            const g = list[c.dataIndex];
+                            return '平均 ' + g.cycleAvg.toFixed(1) + ' h · ' + g.orders + ' 单 · 考核分 ' +
+                                (g.score === null ? '-' : g.score.toFixed(1));
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: { beginAtZero: true, grid: { color: '#f0f1f4' }, title: { display: true, text: '小时', font: { size: 11 } } },
+                y: { grid: { display: false }, ticks: { font: { size: 11 } } }
+            }
+        }
+    });
+}
+
+/* ------------------------------------------------------------------
+   9. 表格
+   ------------------------------------------------------------------ */
+const DIM_COLS = [
+    { k: 'name', t: '名称', align: 'left' },
+    { k: 'orders', t: '订单数', align: 'num' },
+    { k: 'cycleAvg', t: '平均全流程', align: 'num' },
+    { k: 'workAvg', t: '平均作业', align: 'num' },
+    { k: 'wait', t: '待发车', align: 'num' },
+    { k: 'load', t: '装货', align: 'num' },
+    { k: 'transit', t: '在途', align: 'num' },
+    { k: 'border', t: '清关', align: 'num' },
+    { k: 'unload', t: '卸货', align: 'num' },
+    { k: 'onTime', t: '准时率', align: 'num' },
+    { k: 'issueOrders', t: '异常单', align: 'num' },
+    { k: 'score', t: '考核分', align: 'num' },
+    { k: 'grade', t: '等级', align: 'left' }
+];
+
+function dimValue(g, key) {
+    switch (key) {
+        case 'name': return esc(g.name);
+        case 'orders': return String(g.orders);
+        case 'cycleAvg': return fmtH(g.cycleAvg);
+        case 'workAvg': return fmtH(g.workAvg);
+        case 'onTime': return pct(g.onTime);
+        case 'issueOrders': return g.issueOrders + '<span class="sub"> / ' + g.issues + '</span>';
+        case 'score': return scoreCell(g.score);
+        case 'grade': return gradeTag(g.grade);
+        default: return fmtH(g.phaseAvg && g.phaseAvg[key] !== undefined ? g.phaseAvg[key] : null);
+    }
+}
+
+function sortGroups(groups, key, dir) {
+    const raw = g => {
+        if (key === 'name') return g.name;
+        if (key === 'grade') return g.score === null ? null : g.score;
+        if (key === 'issueOrders') return g.issueOrders;
+        if (key === 'orders') return g.orders;
+        if (key === 'onTime') return g.onTime;
+        if (key === 'score') return g.score;
+        if (key === 'cycleAvg' || key === 'workAvg') return g[key];
+        if (g.phaseAvg && g.phaseAvg[key] !== undefined) return g.phaseAvg[key];
+        return 0;
+    };
+
+    return groups.slice().sort((a, b) => {
+        const va = raw(a), vb = raw(b);
+        // 无数据的对象（如仅测试单、未记录节点）始终排在末尾，避免干扰考核排序
+        const na = (va === null || va === undefined), nb = (vb === null || vb === undefined);
+        if (na && nb) return 0;
+        if (na) return 1;
+        if (nb) return -1;
+        if (typeof va === 'string' || typeof vb === 'string') {
+            return String(va).localeCompare(String(vb), 'zh') * dir;
+        }
+        return (va - vb) * dir;
+    });
+}
+
+function renderDimHead(el, dim) {
+    const s = SORT[dim];
+    el.innerHTML = DIM_COLS.map(c => {
+        const on = s.k === c.k;
+        return '<th class="sortable ' + (c.align === 'num' ? 'num ' : '') + (on ? 'on' : '') +
+            '" data-dim="' + dim + '" data-k="' + c.k + '">' + c.t +
+            '<span class="arw">' + (on ? (s.dir === 1 ? '↑' : '↓') : '↕') + '</span></th>';
+    }).join('');
+}
+
+function renderDimBody(tbody, groups, dim) {
+    const s = SORT[dim];
+    const list = sortGroups(groups, s.k, s.dir);
+    if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="13" class="rp-empty">当前筛选条件下没有数据</td></tr>';
+        return;
+    }
+    tbody.innerHTML = list.map(g => {
+        const cells = DIM_COLS.map(c => {
+            const cls = c.align === 'num' ? 'num' : '';
+            if (c.k === 'name') {
+                return '<td class="' + cls + '"><div class="name">' + dimValue(g, c.k) + '</div></td>';
+            }
+            return '<td class="' + cls + '">' + dimValue(g, c.k) + '</td>';
+        }).join('');
+        return '<tr>' + cells + '</tr>';
+    }).join('');
+}
+
+function renderDimTables(rows) {
+    const drivers = aggregate(rows, 'driverKey', 'driver');
+    const vehicles = aggregate(rows, 'plateKey', 'plate');
+    const customers = aggregate(rows, 'customerKey', 'customer');
+
+    // 司机名优先取司机档案里的规范写法
+    drivers.forEach(g => {
+        const d = DRIVER_DIR[g.key];
+        if (d && d.name) g.name = d.name;
+    });
+    renderDimHead(document.getElementById('thDriver'), 'driver');
+    renderDimHead(document.getElementById('thVehicle'), 'vehicle');
+    renderDimHead(document.getElementById('thCustomer'), 'customer');
+
+    renderDimBody(document.getElementById('tbDriver'), drivers, 'driver');
+    renderDimBody(document.getElementById('tbVehicle'), vehicles, 'vehicle');
+    renderDimBody(document.getElementById('tbCustomer'), customers, 'customer');
+
+    return { drivers: drivers, vehicles: vehicles, customers: customers };
+}
+
+function nodeRowHtml(n) {
+    const limit = slaMs(n.key);
+    const hasRec = n.ms > 0;
+
+    let state;
+    if (n.running) state = '<span class="tl-muted">进行中</span>';
+    else if (!hasRec) state = '<span class="tl-muted">无记录</span>';
+    else if (n.ms > limit) state = '<span class="tl-bad">超时 +' + fmtDur(n.ms - limit) + '</span>';
+    else state = '<span class="tl-ok">准时</span>';
+
+    const entry = n.startAt ? TMS.util.dt(n.startAt) : '—';
+    const place = n.hasLoc
+        ? '<a href="' + TMS.geo.mapUrl(n.lat, n.lng) + '" target="_blank" rel="noopener">' +
+          TMS.geo.fmt(n.lat, n.lng) + '</a>'
+        : '<span class="tl-muted">无定位</span>';
+
+    const dot = n.running ? 'run' : (hasRec ? 'done' : '');
+
+    return '<tr>' +
+        '<td><span class="tl-dot ' + dot + '"></span>' + esc(n.label) + '</td>' +
+        '<td>' + entry + '</td>' +
+        '<td>' + place + '</td>' +
+        '<td class="num">' + fmtDur(n.ms) + '</td>' +
+        '<td class="num tl-muted">' + fmtDur(limit) + '</td>' +
+        '<td>' + state + '</td>' +
+        '</tr>';
+}
+
+function renderOrderTable(rows) {
+    const tbody = document.getElementById('tbOrder');
+    const wrap = tbody.closest('.tl-table-wrap');
+    const keepScroll = wrap ? wrap.scrollTop : 0;
+
+    if (!rows.length) {
+        // 区分"还在同步"和"确实没有数据"，避免首屏误判成没单
+        const msg = RECORDS.length
+            ? '当前筛选条件下没有订单（试试把「订单状态」切到全部，或放宽日期范围）'
+            : '正在同步云端订单数据...';
+        tbody.innerHTML = '<tr><td colspan="12" class="rp-empty">' + msg + '</td></tr>';
+        return;
+    }
+
+    const s = SORT.order;
+    const list = rows.slice().sort((a, b) => {
+        let va, vb;
+        switch (s.k) {
+            case 'orderNo': va = a.orderNo; vb = b.orderNo; break;
+            case 'customer': va = a.customer; vb = b.customer; break;
+            case 'driver': va = a.driver; vb = b.driver; break;
+            case 'plate': va = a.plate; vb = b.plate; break;
+            case 'endAt': va = a.endAt; vb = b.endAt; break;
+            case 'cycle': va = a.cycle; vb = b.cycle; break;
+            case 'work': va = a.work; vb = b.work; break;
+            case 'overdueN': va = a.overdueN; vb = b.overdueN; break;
+            case 'issueCount': va = a.issueCount; vb = b.issueCount; break;
+            case 'score': va = a.score === null ? -1 : a.score; vb = b.score === null ? -1 : b.score; break;
+            default: va = a.endAt; vb = b.endAt;
+        }
+        if (typeof va === 'string' || typeof vb === 'string') {
+            return String(va).localeCompare(String(vb), 'zh') * s.dir;
+        }
+        return (va - vb) * s.dir;
+    });
+
+    tbody.innerHTML = list.map(r => {
+        const open = EXPANDED.has(r.id);
+        const typeTag = r.type === 'domestic'
+            ? '<span class="rp-tag gray">境内</span>'
+            : '<span class="rp-tag">跨境</span>';
+        const nodesHtml = r.nodes.map(nodeRowHtml).join('');
+        const locCount = r.nodes.filter(n => n.hasLoc).length;
+
+        const head = '<tr data-row="' + esc(r.id) + '">' +
+            '<td><span class="tl-toggle" data-toggle="' + esc(r.id) + '">' + (open ? '−' : '+') + '</span></td>' +
+            '<td><div class="name">' + esc(r.orderNo) + '</div>' +
+            '<div class="sub">' + r.statusText + '</div></td>' +
+            '<td>' + esc(r.customer) + '</td>' +
+            '<td>' + esc(r.driver) + '</td>' +
+            '<td>' + esc(r.plate) + (r.trailer ? '<div class="sub">挂 ' + esc(r.trailer) + '</div>' : '') + '</td>' +
+            '<td>' + typeTag + '</td>' +
+            '<td>' + TMS.util.dt(r.endAt) + '</td>' +
+            '<td class="num">' + fmtDur(r.cycle) + '</td>' +
+            '<td class="num">' + fmtDur(r.work) + '</td>' +
+            '<td class="num">' + (r.overdueN ? '<span class="tl-bad">' + r.overdueN + '</span>' : '0') +
+            '<div class="sub">' + r.measuredCount + ' 节点</div></td>' +
+            '<td class="num">' + (r.issueCount ? '<span class="tl-bad">' + r.issueCount + '</span>' : '<span class="tl-muted">0</span>') + '</td>' +
+            '<td class="num">' + scoreCell(r.score) + '</td>' +
+            '</tr>';
+
+        const detail = open ? ('<tr data-detail="' + esc(r.id) + '"><td colspan="12">' +
+            '<div class="tl-node-wrap">' +
+            '<div class="tl-node-title">' +
+            '<span>节点明细</span>' +
+            '<span class="tl-muted">' + (r.type === 'domestic' ? '境内流程' : '跨境流程') +
+            ' · ' + r.measuredCount + '/' + r.nodes.length + ' 个节点已计量 · 定位记录 ' + locCount + ' 条</span>' +
+            '<span class="tl-muted">派车 ' + (r.startTs ? TMS.util.dt(r.startTs) : '—') + '</span>' +
+            '</div>' +
+            '<table class="tl-nodes"><thead><tr>' +
+            '<th>节点</th><th>进入时间</th><th>地点</th><th class="num">耗时</th><th class="num">阈值</th><th>结果</th>' +
+            '</tr></thead><tbody>' + nodesHtml + '</tbody></table>' +
+            '</div></td></tr>') : '';
+
+        return head + detail;
+    }).join('');
+
+    tbody.querySelectorAll('[data-toggle]').forEach(el => {
+        el.addEventListener('click', () => {
+            const id = el.getAttribute('data-toggle');
+            if (EXPANDED.has(id)) EXPANDED.delete(id); else EXPANDED.add(id);
+            renderOrderTable(VIEW);
+        });
+    });
+
+    // 展开/收起是整表重绘，恢复滚动位置，避免长列表瞬间跳回顶部
+    if (wrap) wrap.scrollTop = keepScroll;
+}
+
+/* ------------------------------------------------------------------
+   10. 下拉筛选
+   ------------------------------------------------------------------ */
+function fillSelect(id, items, placeholder) {
+    const sel = document.getElementById(id);
+    const cur = sel.value;
+    const opts = items.map(it => '<option value="' + esc(it.v) + '">' + esc(it.t) + '</option>').join('');
+    sel.innerHTML = '<option value="">' + placeholder + '</option>' + opts;
+    sel.value = items.some(it => it.v === cur) ? cur : '';
+}
+
+function refreshSelectors() {
+    const cusMap = new Map(), drvMap = new Map(), plateMap = new Map();
+
+    RECORDS.forEach(r => {
+        if (!cusMap.has(r.customerKey)) cusMap.set(r.customerKey, r.customer);
+        if (!drvMap.has(r.driverKey)) {
+            const d = DRIVER_DIR[r.driverKey];
+            drvMap.set(r.driverKey, (d && d.name) || r.driver);
+        }
+        if (!plateMap.has(r.plateKey)) plateMap.set(r.plateKey, r.plate);
+    });
+
+    const toItems = (map) => Array.from(map.entries())
+        .sort((a, b) => String(a[1]).localeCompare(String(b[1]), 'zh'))
+        .map(e => ({ v: e[0], t: e[1] }));
+
+    fillSelect('fCustomer', toItems(cusMap), '全部客户');
+    fillSelect('fDriver', toItems(drvMap), '全部司机');
+    fillSelect('fPlate', toItems(plateMap), '全部车辆');
+}
+
+/* ------------------------------------------------------------------
+   11. 主渲染
+   ------------------------------------------------------------------ */
+let DIM_GROUPS = { drivers: [], vehicles: [], customers: [] };
+
+function recompute() {
+    VIEW = filterRows();
+    renderKpi(VIEW);
+    DIM_GROUPS = renderDimTables(VIEW);
+    renderOrderTable(VIEW);
+    drawNodeChart(VIEW);
+    drawTrend(VIEW);
+    drawDimChart('dimDriver', 'cDriver', DIM_GROUPS.drivers);
+    drawDimChart('dimVehicle', 'cVehicle', DIM_GROUPS.vehicles);
+    drawDimChart('dimCustomer', 'cCustomer', DIM_GROUPS.customers);
+    markSortHeaders();
+}
+
+function markSortHeaders() {
+    document.querySelectorAll('#pane-order th.sortable').forEach(th => {
+        const on = th.getAttribute('data-k') === SORT.order.k;
+        th.classList.toggle('on', on);
+        const arw = th.querySelector('.arw');
+        if (arw) arw.textContent = on ? (SORT.order.dir === 1 ? '↑' : '↓') : '↕';
+    });
+}
+
+/* ------------------------------------------------------------------
+   12. 数据订阅
+   ------------------------------------------------------------------ */
+function indexDrivers(raw) {
+    const out = {};
+    Object.keys(raw || {}).forEach(k => {
+        const node = raw[k] || {};
+        if (node && typeof node === 'object' && node.name === undefined) {
+            const kids = Object.keys(node);
+            const grouped = kids.some(c => node[c] && typeof node[c] === 'object' && node[c].name !== undefined);
+            if (grouped) {
+                kids.forEach(c => {
+                    const d = node[c] || {};
+                    if (d.name) out[normName(d.name)] = d;
+                });
+                return;
+            }
+        }
+        if (node.name) out[normName(node.name)] = node;
+    });
+    return out;
+}
+
+function rebuild() {
+    RECORDS = [];
+    Object.keys(RAW.archived).forEach(k => {
+        const o = RAW.archived[k];
+        if (o && typeof o === 'object') RECORDS.push(normalizeOrder(k, o, true));
+    });
+    Object.keys(RAW.live).forEach(k => {
+        const o = RAW.live[k];
+        if (o && typeof o === 'object') RECORDS.push(normalizeOrder(k, o, false));
+    });
+    refreshSelectors();
+    recompute();
+}
+
+onValue(ref(db, 'tms/completed_orders'), snap => {
+    RAW.archived = snap.val() || {};
+    rebuild();
+}, err => {
+    console.warn('[timeliness] completed_orders 读取失败', err);
+    document.getElementById('tbOrder').innerHTML =
+        '<tr><td colspan="12" class="rp-empty">云端数据读取失败：' + esc(err && err.message) + '</td></tr>';
+});
+
+onValue(ref(db, 'tms/orders'), snap => {
+    RAW.live = snap.val() || {};
+    rebuild();
+}, err => {
+    console.warn('[timeliness] orders 读取失败', err);
+});
+
+/* 现场网络差时实时连接首包可能很慢（现场实测可到十几秒），
+   这里先用 REST 拉一次"冷数据"垫底，随后 onValue 仍会接管实时更新。 */
+(function warmUp() {
+    const base = firebaseConfig.databaseURL;
+    const pull = path => fetch(base + '/' + path + '.json', { cache: 'no-store' })
+        .then(r => (r.ok ? r.json() : null)).catch(() => null);
+
+    Promise.all([pull('tms/completed_orders'), pull('tms/orders'), pull('tms/drivers')])
+        .then(res => {
+            let touched = false;
+            if (res[0] && !Object.keys(RAW.archived).length) { RAW.archived = res[0]; touched = true; }
+            if (res[1] && !Object.keys(RAW.live).length) { RAW.live = res[1]; touched = true; }
+            if (res[2] && !Object.keys(DRIVER_DIR).length) { DRIVER_DIR = indexDrivers(res[2]); touched = true; }
+            if (touched) rebuild();
+        });
+})();
+
+onValue(ref(db, 'tms/drivers'), snap => {
+    DRIVER_DIR = indexDrivers(snap.val() || {});
+    rebuild();
+});
+
+onValue(ref(db, 'tms/timeliness/sla'), snap => {
+    const val = snap.val() || {};
+    SLA = (val && val.hours) ? val.hours : {};
+    renderSlaRows();
+    if (RECORDS.length) { refreshSelectors(); recompute(); }
+});
+
+/* ------------------------------------------------------------------
+   13. 交互
+   ------------------------------------------------------------------ */
+window.quick = function (mode) {
+    const today = new Date();
+    const from = document.getElementById('fFrom');
+    const to = document.getElementById('fTo');
+    if (mode === 'all') { from.value = ''; to.value = ''; }
+    else if (mode === 'month') {
+        from.value = TMS.util.ymd(new Date(today.getFullYear(), today.getMonth(), 1));
+        to.value = TMS.util.ymd(today);
+    } else if (mode === 'last30') {
+        from.value = TMS.util.ymd(new Date(today.getTime() - 29 * 86400000));
+        to.value = TMS.util.ymd(today);
+    } else {
+        from.value = today.getFullYear() + '-01-01';
+        to.value = TMS.util.ymd(today);
+    }
+    recompute();
+};
+
+document.getElementById('btnApply').addEventListener('click', recompute);
+['fFrom', 'fTo', 'fCustomer', 'fDriver', 'fPlate', 'fType', 'fStatus'].forEach(id => {
+    document.getElementById(id).addEventListener('change', recompute);
+});
+
+// 表头排序（订单表 / 维度表）
+document.addEventListener('click', e => {
+    const th = e.target.closest('th.sortable');
+    if (!th) return;
+    const dim = th.getAttribute('data-dim');
+    const k = th.getAttribute('data-k');
+
+    if (!dim) {
+        const s = SORT.order;
+        if (s.k === k) s.dir = -s.dir; else { s.k = k; s.dir = (k === 'orderNo' || k === 'customer' || k === 'driver' || k === 'plate') ? 1 : -1; }
+        renderOrderTable(VIEW);
+        markSortHeaders();
+        return;
+    }
+    const s = SORT[dim];
+    if (s.k === k) s.dir = -s.dir; else { s.k = k; s.dir = k === 'name' ? 1 : -1; }
+    renderDimHead(document.getElementById('th' + dim.charAt(0).toUpperCase() + dim.slice(1)), dim);
+    renderDimBody(document.getElementById('tb' + dim.charAt(0).toUpperCase() + dim.slice(1)), DIM_GROUPS[dim + 's'], dim);
+});
+
+// Tab 切换
+document.querySelectorAll('.tl-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.tl-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const name = tab.getAttribute('data-tab');
+        ['order', 'driver', 'vehicle', 'customer'].forEach(n => {
+            document.getElementById('pane-' + n).style.display = (n === name ? '' : 'none');
+        });
+        if (name === 'order') markSortHeaders();
+    });
+});
+
+/* ------------------------------------------------------------------
+   14. 时效阈值
+   ------------------------------------------------------------------ */
+function renderSlaRows() {
+    const box = document.getElementById('slaRows');
+    box.innerHTML = NODE_KEYS.map(k => {
+        const v = Number(SLA[k]) || NODE_META[k].sla;
+        return '<div class="tl-sla-row">' +
+            '<label>' + NODE_META[k].zh + '<span class="tl-muted"> (' + k + ')</span></label>' +
+            '<input type="number" min="0.5" step="0.5" data-sla="' + k + '" value="' + v + '">' +
+            '</div>';
+    }).join('');
+}
+
+function openSla() {
+    renderSlaRows();
+    document.getElementById('slaModal').classList.add('show');
+}
+function closeSla() {
+    document.getElementById('slaModal').classList.remove('show');
+}
+
+document.getElementById('btnSla').addEventListener('click', openSla);
+document.getElementById('slaClose').addEventListener('click', closeSla);
+document.getElementById('slaCancel').addEventListener('click', closeSla);
+document.getElementById('slaModal').addEventListener('click', e => {
+    if (e.target.id === 'slaModal') closeSla();
+});
+
+document.getElementById('slaReset').addEventListener('click', () => {
+    document.querySelectorAll('[data-sla]').forEach(inp => {
+        inp.value = NODE_META[inp.getAttribute('data-sla')].sla;
+    });
+});
+
+document.getElementById('slaSave').addEventListener('click', async () => {
+    const hours = {};
+    document.querySelectorAll('[data-sla]').forEach(inp => {
+        const k = inp.getAttribute('data-sla');
+        const v = Number(inp.value);
+        hours[k] = isFinite(v) && v > 0 ? v : NODE_META[k].sla;
+    });
+    const btn = document.getElementById('slaSave');
+    btn.disabled = true;
+    const label = btn.innerHTML;
+    btn.innerHTML = '保存中...';
+    try {
+        await set(ref(db, 'tms/timeliness/sla'), {
+            hours: hours,
+            updatedAt: Date.now(),
+            by: TMS.session.name() || TMS.session.role()
+        });
+        TMS.audit.log('时效阈值修改', 'tms/timeliness/sla', JSON.stringify(hours));
+        SLA = hours;
+        recompute();
+        closeSla();
+    } catch (e) {
+        alert('保存失败：' + (e && e.message ? e.message : e));
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = label;
+    }
+});
+
+/* ------------------------------------------------------------------
+   15. 导出
+   ------------------------------------------------------------------ */
+document.getElementById('btnExport').addEventListener('click', () => {
+    const head = ['订单号', '状态', '客户', '司机', '车辆', '挂车', '类型', '派车时间', '完成/更新时间',
+        '全流程(h)', '作业时效(h)', '待发车(h)', '装货(h)', '在途(h)', '清关(h)', '卸货(h)',
+        '已计量节点', '超时节点', '异常条数', '考核分', '等级', '各节点耗时'];
+    const lines = [head.join(',')];
+
+    VIEW.slice().sort((a, b) => a.endAt - b.endAt).forEach(r => {
+        const nodeTxt = r.nodes.map(n => n.label + ' ' + fmtDur(n.ms)).join(' | ');
+        const row = [
+            r.orderNo, r.statusText, r.customer, r.driver, r.plate, r.trailer,
+            r.type === 'domestic' ? '境内' : '跨境',
+            r.startTs ? TMS.util.dt(r.startTs) : '',
+            TMS.util.dt(r.endAt),
+            (r.cycle / 3600000).toFixed(2), (r.work / 3600000).toFixed(2),
+            (r.phase.wait / 3600000).toFixed(2), (r.phase.load / 3600000).toFixed(2),
+            (r.phase.transit / 3600000).toFixed(2), (r.phase.border / 3600000).toFixed(2),
+            (r.phase.unload / 3600000).toFixed(2),
+            r.measuredCount, r.overdueN, r.issueCount,
+            r.score === null ? '' : r.score.toFixed(1), gradeOf(r.score) || '', nodeTxt
+        ];
+        lines.push(row.map(v => '"' + String(v === undefined || v === null ? '' : v).replace(/"/g, '""') + '"').join(','));
+    });
+
+    TMS.util.download('Timeliness_Detail_' + TMS.util.today() + '.csv', lines.join('\n'));
+});
+
+document.getElementById('btnExportSum').addEventListener('click', () => {
+    const head = ['维度', '名称', '订单数', '平均全流程(h)', '平均作业(h)', '待发车(h)', '装货(h)',
+        '在途(h)', '清关(h)', '卸货(h)', '准时率', '超时节点', '计量节点', '异常单', '异常条数', '考核分', '等级'];
+    const lines = [head.join(',')];
+
+    const push = (dimLabel, list) => {
+        sortGroups(list, 'score', 1).forEach(g => {
+            const row = [
+                dimLabel, g.name, g.orders,
+                g.cycleAvg === null ? '' : g.cycleAvg.toFixed(2),
+                g.workAvg === null ? '' : g.workAvg.toFixed(2),
+                g.phaseAvg.wait.toFixed(2), g.phaseAvg.load.toFixed(2),
+                g.phaseAvg.transit.toFixed(2), g.phaseAvg.border.toFixed(2), g.phaseAvg.unload.toFixed(2),
+                g.onTime === null ? '' : (g.onTime * 100).toFixed(1) + '%',
+                g.overdue, g.measured, g.issueOrders, g.issues || 0,
+                g.score === null ? '' : g.score.toFixed(1), g.grade || ''
+            ];
+            lines.push(row.map(v => '"' + String(v === undefined || v === null ? '' : v).replace(/"/g, '""') + '"').join(','));
+        });
+    };
+
+    push('司机', DIM_GROUPS.drivers);
+    push('车辆', DIM_GROUPS.vehicles);
+    push('客户', DIM_GROUPS.customers);
+
+    TMS.util.download('Timeliness_Appraisal_' + TMS.util.today() + '.csv', lines.join('\n'));
+});
+
+/* ------------------------------------------------------------------
+   16. 启动
+   ------------------------------------------------------------------ */
+renderSlaRows();
+window.quick('all');
+</script>
+</body>
+</html>
