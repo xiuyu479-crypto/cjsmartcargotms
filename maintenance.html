@@ -671,7 +671,7 @@ function renderMoves() {
         .filter(m => !kw || `${m.name || ''} ${m.plate || ''}`.toLowerCase().includes(kw));
 
     if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="7" class="empty">暂无出入库记录</td></tr>';
+        tbody.innerHTML = '';
         return;
     }
     tbody.innerHTML = rows.slice(0, 200).map(m => `<tr>
@@ -738,14 +738,12 @@ window.renderReport = () => {
     });
 
     const vRows = Object.entries(byVehicle).sort((a, b) => b[1].c - a[1].c);
-    document.getElementById('rpByVehicle').innerHTML = vRows.length ? vRows.map(([k, v]) => `
-        <tr><td><b>${k}</b></td><td>${v.n}</td><td>${fmtHours(v.h)}</td><td>${v.c.toFixed(2)}</td></tr>`).join('')
-        : '<tr><td colspan="4" class="empty">无数据</td></tr>';
+    document.getElementById('rpByVehicle').innerHTML = vRows.map(([k, v]) => `
+        <tr><td><b>${k}</b></td><td>${v.n}</td><td>${fmtHours(v.h)}</td><td>${v.c.toFixed(2)}</td></tr>`).join('');
 
     const mRows = Object.entries(byMonth).sort((a, b) => b[0].localeCompare(a[0]));
-    document.getElementById('rpByMonth').innerHTML = mRows.length ? mRows.map(([k, v]) => `
-        <tr><td>${k}</td><td>${v.n}</td><td>${fmtHours(v.h)}</td><td>${v.c.toFixed(2)}</td></tr>`).join('')
-        : '<tr><td colspan="4" class="empty">无数据</td></tr>';
+    document.getElementById('rpByMonth').innerHTML = mRows.map(([k, v]) => `
+        <tr><td>${k}</td><td>${v.n}</td><td>${fmtHours(v.h)}</td><td>${v.c.toFixed(2)}</td></tr>`).join('');
 
     // 配件消耗 Top10
     const partAgg = {};
