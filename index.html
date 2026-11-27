@@ -108,7 +108,7 @@ body {
 
 <body>
 
-<button class="logoutBtn" onclick="localStorage.removeItem('tms_auth'); localStorage.removeItem('tms_role'); window.location.href='password.html';">Logout / Exit</button>
+<button class="logoutBtn" onclick="localStorage.removeItem('tms_auth'); localStorage.removeItem('tms_role'); localStorage.removeItem('tms_fin_auth'); localStorage.removeItem('tms_fin_at'); window.location.href='password.html';">Logout / Exit</button>
 
 <script>
 /**
@@ -189,6 +189,7 @@ let currentLang = localStorage.getItem('tms_lang') || "zh";
  * 逻辑检查点 2：跳转拦截
  * 这里的逻辑是：点击图标 -> 检查角色 -> 允许则跳转，不允许则弹窗。
  * 绝对不会在这里要求输入密码，因为 userRole 已经在登录时存好了。
+ * 例外：财务模块(fleetcost.html)对 staff 开放跳转，密码在页面内做二级验证。
  */
 function go(url){
     const role = localStorage.getItem("tms_role");
@@ -199,9 +200,10 @@ function go(url){
         return;
     }
 
-    // 员工 (staff) 权限拦截：不能进 费用统计 和 客户账单
+    // 员工 (staff)：财务模块(fleetcost)允许进入 —— 页面内会再要求输入"财务密码"做二次验证，
+    // 用密码区分普通员工与财务人员；客户账单(billing)仍仅限管理员。
     if (role === 'staff') {
-        if (url === 'fleetcost.html' || url === 'billing.html') {
+        if (url === 'billing.html') {
             alert(currentLang === "zh" ? "权限不足：该模块仅限管理员。" : "Access Denied: Admin only.");
             return;
         }
