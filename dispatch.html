@@ -190,11 +190,13 @@ const customerEl = getEl('customer'), tractorEl = getEl('tractor'), trailerEl = 
       orderTypeEl = getEl('orderType'); // New Element
 
 // 自动填充预设逻辑
+let loadedDispatchData = null; // 保存原始派车单数据，供 readForm 写入订单
 if (dispatchOrderId) {
   const dispatchRef = ref(db, `tms/dispatch/${dispatchOrderId}`);
   get(dispatchRef).then((snapshot) => {
     if (snapshot.exists()) {
       const data = snapshot.val();
+      loadedDispatchData = data;
       customerEl.value = data.client || "";
       tractorEl.value = data.head || "";
       trailerEl.value = data.trailer || "";
@@ -358,7 +360,7 @@ function genOrderId(){ return 'SRZM' + new Date().toISOString().replace(/[-:T]/g
 
 function readForm(){
   const f = calcFuel();
-  return {
+  const base = {
     orderType: orderTypeEl.value, // Captured Order Type
     customer: customerEl.value, tractor: tractorEl.value, trailer: trailerEl.value,
     driver: driverEl.value, driverPhone: driverPhoneEl.value,
@@ -367,8 +369,20 @@ function readForm(){
     emptyKm: parseFloat(emptyKmEl.value)||0, loadedKm: parseFloat(loadedKmEl.value)||0,
     fuelTotal: f.total, allowance: parseFloat(allowanceEl.value)||0, transit: parseFloat(transitEl.value)||0,
     notes: notesEl.value, orderId: getEl('orderIdDisplay').innerText,
-    relDispatchId: dispatchOrderId || ""
+    relDispatchId: dispatchOrderId || "",
+    // 线路：优先用派车单预设的装/卸货点，退而使用订单里的地址
+    route: (loadedDispatchData && loadedDispatchData.loadP)
+      ? `${loadedDispatchData.loadP} → ${loadedDispatchData.offP || ''}`
+      : (pickupAddrEl.value ? `${pickupAddrEl.value} → ${dropoffAddrEl.value || ''}` : '')
   };
+  // 关键修复：把派车单预设的运费/津贴/奖金直接写入订单，避免下游只能靠 relDispatchId 回溯
+  // （一旦派车记录被清理，运费就会归零）
+  if (loadedDispatchData) {
+    base.fRate = loadedDispatchData.fRate || null;
+    base.fTrip = loadedDispatchData.fTrip || null;
+    base.fBonus = loadedDispatchData.fBonus || null;
+  }
+  return base;
 }
 
 exportPdfBtn.addEventListener('click', async () => {

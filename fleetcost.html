@@ -261,52 +261,62 @@ const auth = firebase.auth();
 // --- 权限变量 ---
 let isAdmin = false;
 
-// --- 登录处理 ---
-function handleLogin() {
-    const username = document.getElementById('loginUsername').value;
-    const password = document.getElementById('loginPassword').value;
-    
-    let email = '';
-    if (username === 'cjsmartcargo' && password === 'smart2026') {
-        email = 'user@cjsmartcargo.com';
-        isAdmin = false;
-    } else if (username === 'uki202797' && password === 'zxcvbnm') {
-        email = 'admin@cjsmartcargo.com';
-        isAdmin = true;
-    } else {
-        alert('用户名或密码错误');
+// --- 登录处理：改为走 Netlify 后端 /api/auth 统一验证（不再在前端存明文密码） ---
+async function handleLogin() {
+    const username = document.getElementById('loginUsername').value.trim();
+    const password = document.getElementById('loginPassword').value.trim();
+
+    if (!username || !password) {
+        alert('请输入用户名和密码');
         return;
     }
-    
-    // 使用Firebase Auth模拟登录（假设已配置用户）
-    auth.signInWithEmailAndPassword(email, password).catch(() => {
-        // 如果用户不存在，创建（仅开发用，生产中预创建用户）
-        auth.createUserWithEmailAndPassword(email, password);
-    }).then(() => {
-        bootstrap.Modal.getInstance(document.getElementById('loginModal')).hide();
+
+    try {
+        const res = await fetch('/api/auth', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        const result = await res.json();
+
+        if (!result.success) {
+            alert('用户名或密码错误');
+            return;
+        }
+
+        // 与登录页 password.html 保持一致：保存后端签发的 token 与角色
+        localStorage.setItem('tms_auth', result.token);
+        localStorage.setItem('tms_role', result.role);
+        isAdmin = result.role === 'admin';
+
+        const modalEl = document.getElementById('loginModal');
+        const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+        modal.hide();
         applyFilters(); // 刷新数据
-    }).catch(err => alert('登录失败: ' + err.message));
+    } catch (err) {
+        alert('服务器连接失败，请稍后重试');
+    }
 }
 
-// 页面加载时显示登录模态
+// 页面加载时：未登录则弹出登录框（后端验证），已登录直接加载数据
 window.onload = () => {
-    auth.onAuthStateChanged(user => {
-        if (!user) {
-            const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
-            loginModal.show();
-            setTimeout(() => {
-                const backdrop = document.querySelector('.modal-backdrop');
-                if (backdrop) {
-                    backdrop.style.backgroundColor = 'white';
-                    backdrop.style.opacity = '1';
-                }
-            }, 0);
-        } else {
-            // 根据email设置isAdmin（假设admin email为admin@）
-            isAdmin = user.email === 'admin@cjsmartcargo.com';
-            applyFilters();
-        }
-    });
+    const token = localStorage.getItem('tms_auth');
+    const role = localStorage.getItem('tms_role');
+
+    if (!token) {
+        const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
+        loginModal.show();
+        setTimeout(() => {
+            const backdrop = document.querySelector('.modal-backdrop');
+            if (backdrop) {
+                backdrop.style.backgroundColor = 'white';
+                backdrop.style.opacity = '1';
+            }
+        }, 0);
+    } else {
+        isAdmin = role === 'admin';
+        applyFilters();
+    }
     applyLangUI();
 };
 

@@ -333,7 +333,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-import { getDatabase, ref, onValue, update, push, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+import { getDatabase, ref, onValue, update, push, serverTimestamp, set, remove } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDEbePpsrXwD8Okqa93UOGUFE37c8SFHS0",
@@ -545,6 +545,17 @@ async function confirmStep() {
 
     try {
         await update(ref(db, `tms/orders/${orderId}`), updatePayload);
+        // 关键修复：走完最后一步（司机端完成）即归档到 completed_orders，
+        // 与管理端 dynamic.html 的"归档并完结"保持一致，否则 completed/billing 永远看不到该订单
+        if (target > currentFlow.length) {
+            const archivedOrder = Object.assign({}, currentOrderData, updatePayload, {
+                status: "Completed",
+                archivedAt: now
+            });
+            await set(ref(db, `tms/completed_orders/${orderId}`), archivedOrder);
+            await remove(ref(db, `tms/orders/${orderId}`));
+            alert("订单已完结并归档");
+        }
     } catch (e) { alert("Error updating status."); }
 }
 

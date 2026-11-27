@@ -107,7 +107,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-        import { getDatabase, ref, push, onValue, update } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+        import { getDatabase, ref, push, onValue, update, get, set, remove } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDEbePpsrXwD8Okqa93UOGUFE37c8SFHS0",
@@ -186,9 +186,44 @@
             location.reload();
         });
 
+        // 关键修复：实现"确认完结"（此前 window.finishTask 未定义，点击直接报错）
+        // 逻辑：标记派车单 completed，并把关联订单归档到 completed_orders（幂等）
+        window.finishTask = async (dispatchId) => {
+            if (!confirm("确认完结该派车单？订单将归档到已完成记录。")) return;
+            try {
+                const dSnap = await get(ref(db, 'tms/dispatch/' + dispatchId));
+                const dData = dSnap.exists() ? dSnap.val() : null;
+                if (!dData) { alert("派车单不存在"); return; }
+
+                const orderId = dData.confirmedOrderId;
+                if (orderId) {
+                    const oSnap = await get(ref(db, 'tms/orders/' + orderId));
+                    if (oSnap.exists()) {
+                        // 订单仍在进行中：归档到 completed_orders，再从 orders 移除
+                        const order = oSnap.val();
+                        await set(ref(db, 'tms/completed_orders/' + orderId), Object.assign({}, order, {
+                            archivedAt: order.archivedAt || Date.now()
+                        }));
+                        await remove(ref(db, 'tms/orders/' + orderId));
+                    }
+                    // 若订单已不在 orders（说明已被其他端归档），则跳过，不重复写
+                }
+
+                await update(ref(db, 'tms/dispatch/' + dispatchId), { status: 'completed' });
+                alert("已完结");
+                // 刷新当前列表
+                if (typeof window.__activeStatus !== 'undefined' && window.__activeStatus && window.__activeStatus !== 'new') {
+                    renderList(window.__activeStatus);
+                }
+            } catch (e) {
+                alert("完结失败: " + e.message);
+            }
+        };
+
         window.showView = (type, el) => {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             el.classList.add('active');
+            window.__activeStatus = type;
             document.getElementById('view-new').style.display = type === 'new' ? 'block' : 'none';
             document.getElementById('view-list').style.display = type === 'new' ? 'none' : 'block';
             if(type !== 'new') renderList(type);

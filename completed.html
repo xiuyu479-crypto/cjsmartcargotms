@@ -38,6 +38,24 @@ tr:hover{background:#fcfdfe}
 </head>
 <body>
 
+<script>
+// 登录校验：与 index.html / dynamic.html 保持一致，未登录跳转统一登录页
+(function () {
+    const token = localStorage.getItem("tms_auth");
+    const role = localStorage.getItem("tms_role");
+    if (!token) {
+        const page = location.pathname.split('/').pop() + location.search;
+        window.location.href = "password.html?redirect=" + encodeURIComponent(page);
+        return;
+    }
+    // 财务统计与 index.html 一致：仅管理员可访问
+    if (role !== "admin") {
+        alert("权限不足：该模块仅限管理员。");
+        window.location.href = "index.html";
+    }
+})();
+</script>
+
 <div class="header">
   <button class="btn" onclick="location.href='index.html'">← 返回</button>
   <h1>已完成订单财务统计 / Financial Report</h1>
@@ -111,6 +129,16 @@ const searchBtn = document.getElementById('searchBtn');
 const fuelPriceIn = document.getElementById('fuelPrice');
 const exRateIn = document.getElementById('exRate');
 
+// 汇率共享：与 billing.html 使用同一 localStorage key，避免两页汇率不一致
+const EX_RATE_KEY = 'tms_exRate';
+(function initSharedRate() {
+    const saved = localStorage.getItem(EX_RATE_KEY);
+    if (saved) exRateIn.value = saved;
+})();
+exRateIn.addEventListener('change', () => {
+    localStorage.setItem(EX_RATE_KEY, exRateIn.value);
+});
+
 let allOrders = {};
 let allDispatch = {}; // 新增：用于存储原始派车单数据以回溯费用
 
@@ -133,7 +161,7 @@ function computeFinance(o) {
     const revUnit = fRateObj.unit || 'USD';
     const revenueUSD = (revUnit === 'ZMW') ? (revVal / rate) : revVal;
 
-    // 2. 路上费用折算 (Trip Money + Bonus)
+    // 2. 路上费用折算 (Trip Money + Bonus + 司机津贴)
     const fTripObj = o.fTrip || dData.fTrip || {};
     const tripVal = Number(fTripObj.val || o.tripMoney || 0);
     const tripUnit = fTripObj.unit || 'ZMW';
@@ -142,15 +170,26 @@ function computeFinance(o) {
     const bonusVal = Number(fBonusObj.val || 0);
     const bonusUnit = fBonusObj.unit || 'ZMW';
     
+    // 修复：派车单手填的司机津贴(allowance)此前被完全忽略，导致路上成本漏算、毛利虚高
+    // 注意：allowance 无独立单位选择框，默认按 ZMW 折算
+    const allowanceVal = Number(o.allowance || 0);
+    const allowanceUSD = allowanceVal / rate;
+
     const tripUSD = (tripUnit === 'ZMW') ? (tripVal / rate) : tripVal;
     const bonusUSD = (bonusUnit === 'ZMW') ? (bonusVal / rate) : bonusVal;
-    const roadExpenseUSD = tripUSD + bonusUSD;
+    const roadExpenseUSD = tripUSD + bonusUSD + allowanceUSD;
 
-    // 4. 过境费 (优先使用派车单最终确认的数字 o.transit，如果没有则回溯原始预设)
-    let transitUSD = Number(o.transit || o.borderFee || 0);
-    if (!transitUSD && dData.transit && dData.transit.val) {
-        // 注意：neworders里 transit是对象 {val, unit='USD'}
-        transitUSD = Number(dData.transit.val); 
+    // 4. 过境费：订单里填了正数就用（dispatch 以 USD 数字存入），
+    //    为 0/空时回溯派车单预设，并按预设单位折算（修复：此前忽略 ZMW 单位）
+    let transitUSD = 0;
+    const orderTransit = (o.transit !== undefined && o.transit !== null && o.transit !== '') ? Number(o.transit) : NaN;
+    if (!isNaN(orderTransit) && orderTransit > 0) {
+        transitUSD = orderTransit;
+    } else if (o.borderFee) {
+        transitUSD = Number(o.borderFee) || 0;
+    } else if (dData.transit && dData.transit.val !== undefined) {
+        const tv = Number(dData.transit.val) || 0;
+        transitUSD = (dData.transit.unit === 'ZMW') ? (tv / rate) : tv;
     }
     // --- 修复逻辑结束 ---
 
@@ -188,17 +227,30 @@ function render(dateF = '', keyF = '') {
     entries.forEach(([id, o]) => {
         const dateStr = o.archivedAt ? new Date(o.archivedAt).toLocaleDateString() : '-';
         const searchStr = `${o.orderId} ${o.customer} ${o.tractor} ${o.driver}`.toLowerCase();
-        
-        if ((!keyF || searchStr.includes(keyF.toLowerCase())) && (!dateF || dateStr.includes(dateF))) {
+
+        // 修复：日期筛选。dateF 是 YYYY-MM-DD，需把归档时间转成同格式比较，而不是用本地化字符串 includes
+        let matchDate = true;
+        if (dateF) {
+            if (!o.archivedAt) {
+                matchDate = false;
+            } else {
+                const d = new Date(o.archivedAt);
+                const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                matchDate = (ymd === dateF);
+            }
+        }
+
+        if ((!keyF || searchStr.includes(keyF.toLowerCase())) && matchDate) {
             const fin = computeFinance(o);
+            const totalKm = (Number(o.loadedKm) || 0) + (Number(o.emptyKm) || 0); // 修复：运算符优先级
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td><b>${o.orderId || id}</b><br><small>${o.driver || '-'}</small></td>
                 <td>${o.customer || '-'}<br><small style="color:var(--accent)">${o.tractor || '-'}</small></td>
                 <td>${fin.days} 天</td>
-                <td>${o.loadedKm + o.emptyKm || 0} Km<br><small>${fin.liters.toFixed(1)} L</small></td>
+                <td>${totalKm} Km<br><small>${fin.liters.toFixed(1)} L</small></td>
                 <td style="color:var(--accent); font-weight:bold">$${fin.revenueUSD.toFixed(2)}</td>
-                <td>$${fin.transitUSD}</td>
+                <td>$${fin.transitUSD.toFixed(2)}</td>
                 <td>$${fin.fuelCostUSD.toFixed(2)}</td>
                 <td>$${fin.roadExpenseUSD.toFixed(2)}</td>
                 <td>
@@ -248,10 +300,10 @@ searchBtn.addEventListener('click', () => {
 });
 
 document.getElementById('exportBtn').addEventListener('click', () => {
-    let csv = "\uFEFF订单号,客户,车牌,完成天数,里程,油耗,运费(USD),燃油成本(USD),路上费用(USD),其他费用(USD),毛利(USD),日期\n";
+    let csv = "\uFEFF订单号,客户,车牌,完成天数,里程,油耗,运费(USD),过境费(USD),燃油成本(USD),路上费用(USD),其他费用(USD),毛利(USD),日期\n";
     Object.values(allOrders).forEach(o => {
         const f = computeFinance(o);
-        csv += `${o.orderId},${o.customer},${o.tractor},${f.days},${(o.loadedKm||0)+(o.emptyKm||0)},${f.liters},${f.revenueUSD.toFixed(2)},${f.fuelCostUSD.toFixed(2)},${f.roadExpenseUSD.toFixed(2)},${f.manualUSD.toFixed(2)},${f.gross},${new Date(o.archivedAt).toLocaleDateString()}\n`;
+        csv += `${o.orderId},${o.customer},${o.tractor},${f.days},${(Number(o.loadedKm)||0)+(Number(o.emptyKm)||0)},${f.liters},${f.revenueUSD.toFixed(2)},${f.transitUSD.toFixed(2)},${f.fuelCostUSD.toFixed(2)},${f.roadExpenseUSD.toFixed(2)},${f.manualUSD.toFixed(2)},${f.gross},${o.archivedAt ? new Date(o.archivedAt).toLocaleDateString() : '-'}\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");

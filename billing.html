@@ -59,6 +59,24 @@ tr:hover{background:#fcfdfe}
 </head>
 <body>
 
+<script>
+// 登录校验：与 index.html / dynamic.html 保持一致，未登录跳转统一登录页
+(function () {
+    const token = localStorage.getItem("tms_auth");
+    const role = localStorage.getItem("tms_role");
+    if (!token) {
+        const page = location.pathname.split('/').pop() + location.search;
+        window.location.href = "password.html?redirect=" + encodeURIComponent(page);
+        return;
+    }
+    // 客户账单与 index.html 一致：仅管理员可访问
+    if (role !== "admin") {
+        alert("权限不足：该模块仅限管理员。");
+        window.location.href = "index.html";
+    }
+})();
+</script>
+
 <div class="header">
   <button class="btn" onclick="location.href='index.html'">← 返回</button>
   <h1>客户账单 / Customer Billing</h1>
@@ -164,6 +182,16 @@ const genPdfBtn = document.getElementById('genPdfBtn');
 const exRateIn = document.getElementById('exRate');
 const customerSelect = document.getElementById('customerSelect');
 
+// 汇率共享：与 completed.html 使用同一 localStorage key，避免两页汇率不一致
+const EX_RATE_KEY = 'tms_exRate';
+(function initSharedRate() {
+    const saved = localStorage.getItem(EX_RATE_KEY);
+    if (saved) exRateIn.value = saved;
+})();
+exRateIn.addEventListener('change', () => {
+    localStorage.setItem(EX_RATE_KEY, exRateIn.value);
+});
+
 let allOrders = {};
 let allDispatch = {};
 let uniqueCustomers = new Set();
@@ -183,9 +211,17 @@ function computeFee(o) {
         paidUSD = (o.paidAmount.unit === 'ZMW') ? (Number(o.paidAmount.val) / rate) : Number(o.paidAmount.val);
     }
 
-    const isPaid = paidUSD >= revenueUSD;
+    // 修复：运费为 0（未读到运费）时不应判定为"已付"，避免 0>=0 误判
+    const isPaid = revenueUSD > 0 && paidUSD >= revenueUSD;
     const dateStr = o.archivedAt ? new Date(o.archivedAt).toLocaleDateString() : '-';
-    const route = o.route || (allDispatch[o.relDispatchId] ? allDispatch[o.relDispatchId].route || '-' : '-'); // 假设有route字段
+    // 修复：route 优先取订单/派车单真实线路，其次用装/卸货点拼出，避免永远显示 '-'
+    const dData = allDispatch[o.relDispatchId] || {};
+    let route = o.route || dData.route;
+    if (!route) {
+        const from = o.pickupAddr || dData.loadP;
+        const to = o.dropoffAddr || dData.offP;
+        route = (from || to) ? `${from || ''} → ${to || ''}` : '-';
+    }
 
     return { revenueUSD, revenueZMW, paidUSD, isPaid, dateStr, route };
 }
@@ -205,14 +241,15 @@ function render(startD = '', endD = '', custF = '', keyF = '') {
 
     Object.entries(allOrders).forEach(([id, o]) => {
         const fin = computeFee(o);
-        const archDate = new Date(o.archivedAt);
-        const startDateObj = startD ? new Date(startD) : null;
-        const endDateObj = endD ? new Date(endD) : null;
+        const archDate = o.archivedAt ? new Date(o.archivedAt) : null;
+        const startDateObj = startD ? new Date(startD + 'T00:00:00') : null;
+        // 修复：结束日期取当天 23:59:59.999，避免漏掉结束日当天的订单
+        const endDateObj = endD ? new Date(endD + 'T23:59:59.999') : null;
         const searchStr = `${o.orderId} ${fin.route}`.toLowerCase();
 
         if ((!custF || o.customer === custF) &&
-            (!startDateObj || archDate >= startDateObj) &&
-            (!endDateObj || archDate <= endDateObj) &&
+            (!startDateObj || (archDate && archDate >= startDateObj)) &&
+            (!endDateObj || (archDate && archDate <= endDateObj)) &&
             (!keyF || searchStr.includes(keyF.toLowerCase()))) {
 
             filteredOrders.push({ id, o, fin });
@@ -281,14 +318,15 @@ async function genPdfForCustomer() {
     let filtered = [];
     Object.entries(allOrders).forEach(([id, o]) => {
         const fin = computeFee(o);
-        const archDate = new Date(o.archivedAt);
-        const startDateObj = startD ? new Date(startD) : null;
-        const endDateObj = endD ? new Date(endD) : null;
+        const archDate = o.archivedAt ? new Date(o.archivedAt) : null;
+        const startDateObj = startD ? new Date(startD + 'T00:00:00') : null;
+        // 修复：结束日期取当天 23:59:59.999，避免漏掉结束日当天的订单
+        const endDateObj = endD ? new Date(endD + 'T23:59:59.999') : null;
         const searchStr = `${o.orderId} ${fin.route}`.toLowerCase();
 
         if (o.customer === cust &&
-            (!startDateObj || archDate >= startDateObj) &&
-            (!endDateObj || archDate <= endDateObj) &&
+            (!startDateObj || (archDate && archDate >= startDateObj)) &&
+            (!endDateObj || (archDate && archDate <= endDateObj)) &&
             (!keyF || searchStr.includes(keyF.toLowerCase()))) {
             filtered.push({ id, o, fin });
         }
