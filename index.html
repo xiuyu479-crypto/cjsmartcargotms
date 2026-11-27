@@ -26,7 +26,7 @@ body {
     border:none;
     background:rgba(255,255,255,0.55);
     backdrop-filter: blur(8px);
-    color:#1e63d8;
+    color:var(--c-primary);
     cursor:pointer;
     font-size:14px;
     box-shadow:0 2px 4px rgba(0,0,0,0.1);
@@ -48,7 +48,7 @@ body {
 
 /* Header */
 .header {
-    color:#1f4e92;
+    color:var(--c-text);
     font-weight:600;
     padding:40px 26px 20px 26px;
     text-align:center;
@@ -82,7 +82,7 @@ body {
     text-align:center;
     font-size:17px;
     font-weight:600;
-    color:#1e63d8;
+    color:var(--c-primary);
     cursor:pointer;
     box-shadow:0 6px 14px rgba(0,0,0,0.1);
     transition: all 0.25s;
@@ -104,11 +104,11 @@ body {
     opacity:0.9;
 }
 </style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="stylesheet" href="assets/css/theme.css">
 </head>
 
 <body>
-
-<button class="logoutBtn" onclick="localStorage.removeItem('tms_auth'); localStorage.removeItem('tms_role'); localStorage.removeItem('tms_fin_auth'); localStorage.removeItem('tms_fin_at'); window.location.href='password.html';">Logout / Exit</button>
 
 <script>
 /**
@@ -125,59 +125,67 @@ if(!authToken) {
 }
 </script>
 
-<div class="langSwitch">
-    <button class="langBtn" onclick="switchLang()"><span id='langLabel'>English</span></button>
-</div>
-
-<div class="header" id="mainTitle">TMS 综合管理系统</div>
+<header class="appbar">
+    <div class="appbar-left">
+        <span class="appbar-logo"><i class="bi bi-truck"></i></span>
+        <div>
+            <div class="appbar-title" id="mainTitle">TMS 综合管理</div>
+            <div class="appbar-sub">CJ SmartCargo · Zambia</div>
+        </div>
+    </div>
+    <div class="appbar-right">
+        <button class="langBtn" onclick="switchLang()"><i class="bi bi-translate"></i> <span id='langLabel'>English</span></button>
+        <button class="logoutBtn" onclick="localStorage.removeItem('tms_auth'); localStorage.removeItem('tms_role'); localStorage.removeItem('tms_fin_auth'); localStorage.removeItem('tms_fin_at'); window.location.href='password.html';"><i class="bi bi-box-arrow-right"></i> 退出</button>
+    </div>
+</header>
 
 <div class="container">
     <div class="card" onclick="go('neworders.html')" id="btnNew">
-        <img src="https://img.icons8.com/ios-filled/50/1e63d8/plus-2-math.png">
+        <i class="bi bi-plus-lg card-icon"></i>
         新建订单
     </div>
     <div class="card" onclick="go('dispatch.html')" id="btn1">
-        <img src="https://img.icons8.com/ios-filled/50/1e63d8/truck.png">
+        <i class="bi bi-truck card-icon"></i>
         派车单制作
     </div>
     <div class="card" onclick="go('dynamic.html')" id="btn2">
-        <img src="https://img.icons8.com/ios-filled/50/1e63d8/dashboard.png">
+        <i class="bi bi-speedometer2 card-icon"></i>
         动态监控
     </div>
     <div class="card" onclick="go('vehicles.html')" id="btn3">
-        <img src="https://img.icons8.com/ios-filled/50/1e63d8/car.png">
+        <i class="bi bi-car-front card-icon"></i>
         车辆档案
     </div>
     <div class="card" onclick="go('oa.html')" id="btn4">
-        <img src="https://img.icons8.com/ios-filled/50/1e63d8/driver.png">
+        <i class="bi bi-person-badge card-icon"></i>
         流程申请
     </div>
     <div class="card" onclick="go('completed.html')" id="btn5">
-        <img src="https://img.icons8.com/ios-filled/50/1e63d8/document.png">
+        <i class="bi bi-file-earmark-text card-icon"></i>
         已完成订单记录
     </div>
     <div class="card" onclick="go('maintenance.html')" id="btn6">
-        <img src="https://img.icons8.com/ios-filled/50/1e63d8/services.png">
+        <i class="bi bi-tools card-icon"></i>
         车辆维护
     </div>
     <div class="card" onclick="go('tracking.html')" id="btn7">
-        <img src="https://img.icons8.com/ios-filled/50/1e63d8/copy.png">
+        <i class="bi bi-share card-icon"></i>
         客户追踪共享
     </div>
     <div class="card" onclick="go('fleetcost.html')" id="btn8">
-        <img src="https://img.icons8.com/ios-filled/50/1e63d8/money.png">
+        <i class="bi bi-cash-stack card-icon"></i>
         车队费用统计
     </div>
     <div class="card" onclick="go('billing.html')" id="btn9">
-        <img src="https://img.icons8.com/ios-filled/50/1e63d8/bill.png">
+        <i class="bi bi-receipt card-icon"></i>
         客户账单
     </div>
     <div class="card" onclick="go('attendance.html')" id="btn10">
-        <img src="https://img.icons8.com/ios-filled/50/1e63d8/map.png">
+        <i class="bi bi-geo-alt card-icon"></i>
         GPS 车辆追踪
     </div>
     <div class="card" onclick="go('clients.html')" id="btnClients">
-        <img src="https://img.icons8.com/ios-filled/50/1e63d8/conference-call.png">
+        <i class="bi bi-people card-icon"></i>
         客户信息
     </div>
 </div>
@@ -204,7 +212,7 @@ function go(url){
     // 用密码区分普通员工与财务人员；客户账单(billing)仍仅限管理员。
     if (role === 'staff') {
         if (url === 'billing.html') {
-            alert(currentLang === "zh" ? "权限不足：该模块仅限管理员。" : "Access Denied: Admin only.");
+            alert(currentLang === "zh" ? "权限不足：仅限管理员访问。" : "Access Denied: Admin only.");
             return;
         }
     }
@@ -225,7 +233,7 @@ function go(url){
 const langPack = {
     zh:{
         langLabel:"English",
-        mainTitle:"TMS 综合管理系统",
+        mainTitle:"TMS 综合管理",
         btnNew: "新建订单",
         btn1:"派车单制作",
         btn2:"动态监控",
@@ -241,7 +249,7 @@ const langPack = {
     },
     en:{
         langLabel:"中文",
-        mainTitle:"TMS Management System",
+        mainTitle:"TMS Management",
         btnNew: "New Order",
         btn1:"Dispatch Order",
         btn2:"Dynamic Monitoring",
@@ -268,24 +276,24 @@ function applyLang(){
     document.getElementById("langLabel").innerText = t.langLabel;
     document.getElementById("mainTitle").innerText = t.mainTitle;
 
-    updateCard("btnNew", t.btnNew, "plus-2-math.png");
-    updateCard("btn1", t.btn1, "truck.png");
-    updateCard("btn2", t.btn2, "dashboard.png");
-    updateCard("btn3", t.btn3, "car.png");
-    updateCard("btn4", t.btn4, "driver.png");
-    updateCard("btn5", t.btn5, "document.png");
-    updateCard("btn6", t.btn6, "services.png");
-    updateCard("btn7", t.btn7, "copy.png");
-    updateCard("btn8", t.btn8, "money.png");
-    updateCard("btn9", t.btn9, "bill.png");
-    updateCard("btn10", t.btn10, "map.png");
-    updateCard("btnClients", t.btnClients, "conference-call.png");
+    updateCard("btnNew", t.btnNew, "plus-lg");
+    updateCard("btn1", t.btn1, "truck");
+    updateCard("btn2", t.btn2, "speedometer2");
+    updateCard("btn3", t.btn3, "car-front");
+    updateCard("btn4", t.btn4, "person-badge");
+    updateCard("btn5", t.btn5, "file-earmark-text");
+    updateCard("btn6", t.btn6, "tools");
+    updateCard("btn7", t.btn7, "share");
+    updateCard("btn8", t.btn8, "cash-stack");
+    updateCard("btn9", t.btn9, "receipt");
+    updateCard("btn10", t.btn10, "geo-alt");
+    updateCard("btnClients", t.btnClients, "people");
 }
 
 function updateCard(id, text, iconName){
     const el = document.getElementById(id);
     if(el){
-        el.innerHTML = `<img src="https://img.icons8.com/ios-filled/50/1e63d8/${iconName}">${text}`;
+        el.innerHTML = `<i class="bi bi-${iconName} card-icon"></i>${text}`;
     }
 }
 

@@ -6,7 +6,7 @@
     <title>客户信息管理 - TMS</title>
     <style>
         :root {
-            --primary-color: #1e63d8;
+            --primary-color: var(--c-primary);
             --bg-gradient: linear-gradient(135deg, #e9f3ff 0%, #dbe9ff 100%);
             --glass-bg: rgba(255, 255, 255, 0.75);
         }
@@ -48,12 +48,14 @@
         .contact-row { display: grid; grid-template-columns: 1fr 1fr 1.2fr 1.2fr 40px; gap: 8px; margin-bottom: 10px; }
         .btn-circle { width: 30px; height: 30px; border-radius: 50%; padding: 0; display: flex; align-items: center; justify-content: center; }
     </style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="stylesheet" href="assets/css/theme.css">
 </head>
 <body>
 
     <nav class="navbar">
         <div class="nav-title" onclick="location.href='index.html'">
-            <img src="https://img.icons8.com/ios-filled/30/1e63d8/left.png"> <span>客户信息管理</span>
+            <i class="bi bi-arrow-left"></i> <span>客户信息管理</span>
         </div>
         <div class="btn-group">
             <button class="btn-main" onclick="openModal()">+ 添加客户</button>
@@ -143,7 +145,7 @@
                 <td>${c.industry}</td>
                 <td>
                     <div class="contact-summary" onclick="window.toggleContacts('${id}')">
-                        ${mainContact} <span class="expand-icon">▼</span>
+                        ${mainContact} <span class="expand-icon"><i class="bi bi-chevron-down"></i></span>
                     </div>
                 </td>
                 <td>${c.address || '-'}</td>
@@ -161,8 +163,8 @@
                 <li class="contact-detail-item">
                     <span style="width:80px"><b>${con.name}</b></span>
                     <span style="width:100px">${con.job || '-'}</span>
-                    <span style="width:120px">📞 ${con.phone || '-'}</span>
-                    <span>💬 WeChat: ${con.wechat || '-'}</span>
+                    <span style="width:120px"><i class="bi bi-telephone"></i> ${con.phone || '-'}</span>
+                    <span><i class="bi bi-chat-dots"></i> WeChat: ${con.wechat || '-'}</span>
                 </li>
             `).join('');
             

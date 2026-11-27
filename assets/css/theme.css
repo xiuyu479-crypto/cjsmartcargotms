@@ -1,0 +1,717 @@
+/* ==========================================================================
+   TMS 统一设计系统 / Unified Design System
+   风格：简约、克制、企业级（参考 Ant Design / Tencent 设计语言）
+   原则：
+     1. 一个品牌色 + 三个语义色，不再出现第四个强调色
+     2. 中性灰阶统一，避免 #222~#eee 十几种灰
+     3. 统一圆角、统一阴影、统一控件高度
+     4. 所有页面共用，页面内只写业务布局，不再各自定义视觉
+   注意：本文件必须在各页 <style> 之后加载，才能覆盖页面旧的视觉定义
+   ========================================================================== */
+
+:root {
+    /* 品牌色 */
+    --c-primary: #1e63d8;
+    --c-primary-hover: #1a56bf;
+    --c-primary-active: #17499f;
+    --c-primary-soft: #eff4ff;
+    --c-primary-soft-border: #cfe0ff;
+
+    /* 语义色（低饱和，仅用于状态表达） */
+    --c-success: #12805c;
+    --c-success-soft: #e8f6f0;
+    --c-warning: #b45309;
+    --c-warning-soft: #fff6e6;
+    --c-danger: #d92d20;
+    --c-danger-soft: #fef3f2;
+
+    /* 中性色 */
+    --c-bg: #f5f6f8;
+    --c-surface: #ffffff;
+    --c-surface-2: #fafbfc;
+    --c-border: #e6e8ec;
+    --c-border-strong: #d3d7de;
+    --c-divider: #f0f1f4;
+    --c-text: #101828;
+    --c-text-body: #374151;
+    --c-text-muted: #6b7280;
+    --c-text-faint: #9aa2af;
+
+    /* 圆角 */
+    --r-sm: 6px;
+    --r: 8px;
+    --r-lg: 12px;
+    --r-pill: 999px;
+
+    /* 阴影（克制，靠层次不靠重影） */
+    --sh-1: 0 1px 2px rgba(16, 24, 40, .06);
+    --sh-2: 0 1px 3px rgba(16, 24, 40, .10), 0 1px 2px rgba(16, 24, 40, .06);
+    --sh-3: 0 8px 24px rgba(16, 24, 40, .10);
+
+    /* 字体 */
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Roboto, Arial, sans-serif;
+}
+
+/* --------------------------------------------------------------------------
+   1. 基础层
+   -------------------------------------------------------------------------- */
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+    margin: 0;
+    background: var(--c-bg) !important;
+    background-image: none !important;
+    color: var(--c-text-body);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: var(--c-text);
+    font-weight: 600;
+    letter-spacing: -.01em;
+    margin: 0 0 .5em;
+}
+
+a { color: var(--c-primary); text-decoration: none; }
+a:hover { color: var(--c-primary-hover); text-decoration: underline; }
+
+::selection { background: var(--c-primary-soft); color: var(--c-primary-active); }
+
+/* 统一滚动条 */
+* { scrollbar-width: thin; scrollbar-color: #cfd4dc transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #cfd4dc; border-radius: var(--r-pill); }
+::-webkit-scrollbar-thumb:hover { background: #b6bdc7; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* --------------------------------------------------------------------------
+   2. 页面头部：所有页统一为白色悬浮条
+   .header / .nav-header / .navbar / .topbar
+   -------------------------------------------------------------------------- */
+.header,
+.nav-header,
+.navbar,
+.topbar {
+    background: var(--c-surface) !important;
+    color: var(--c-text) !important;
+    border-bottom: 1px solid var(--c-border);
+    box-shadow: var(--sh-1);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 12px 20px !important;
+    min-height: 60px;
+    position: sticky;
+    top: 0;
+    z-index: 200;
+}
+
+.header h1, .nav-header h1, .navbar h1,
+.header .header-title, .header-title {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--c-text);
+    margin: 0;
+    letter-spacing: -.01em;
+    background: none;
+    padding: 0;
+}
+
+.header h2, .header h3,
+.nav-header h2, .navbar h2 {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--c-text);
+    margin: 0;
+    letter-spacing: -.01em;
+}
+
+/* 头部内的按钮一律降为次要样式，避免和页面主操作抢焦点（返回/工具类） */
+.header > .btn,
+.nav-header > .btn,
+.navbar > .btn,
+.header .btn:not(.btn-primary):not(.btn-main) {
+    background: var(--c-surface);
+    color: var(--c-text-body);
+    border: 1px solid var(--c-border-strong);
+}
+
+.header > .btn:hover,
+.nav-header > .btn:hover,
+.navbar > .btn:hover,
+.header .btn:not(.btn-primary):not(.btn-main):hover {
+    background: var(--c-primary-soft);
+    color: var(--c-primary);
+    border-color: var(--c-primary-soft-border);
+}
+
+/* 头部左侧标题组（OA/客户信息/考勤等页的 .nav-title） */
+.nav-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--c-text);
+    cursor: pointer;
+}
+
+.nav-title svg, .nav-title .bi { color: var(--c-primary); }
+
+/* 去装饰性色条：配置栏统一为普通卡片 */
+.config-bar {
+    border-left: 0 !important;
+    border: 1px solid var(--c-border) !important;
+    box-shadow: var(--sh-1) !important;
+}
+
+.header img, .nav-header img { max-height: 32px; }
+
+/* 头部的说明小字 */
+.header small, .nav-header small { color: var(--c-text-muted); }
+
+/* --------------------------------------------------------------------------
+   3. 按钮：所有旧类名统一到三种语义 + 两种尺寸
+      主要(实心品牌色) / 次要(白底描边) / 危险(浅红底红字)
+   -------------------------------------------------------------------------- */
+
+/* --- 3.1 基础按钮形态（覆盖项目里所有历史类名） --- */
+.btn,
+.btn-main, .btn-primary, .btn-submit, .btn-save, .btn-export, .btn-pdf,
+.refresh-btn, .gps-btn-main, .gps-btn, .m-btn, .expense-btn, .issue-btn,
+.btn-approve, .btn-resolve, .btn-reject, .btn-delete, .action-btn,
+.btn-outline, .btn-ui-light, .btn-primary-soft, .btn-nav, .btn-block,
+.gps-btn-outline, .back-btn, .tab-btn, .btn-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 34px;
+    padding: 0 14px;
+    border-radius: var(--r);
+    border: 1px solid transparent;
+    background: var(--c-primary);
+    color: #fff;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background-color .15s ease, border-color .15s ease,
+                color .15s ease, box-shadow .15s ease, transform .15s ease;
+    box-shadow: none;
+}
+
+.btn:hover, .btn-main:hover, .btn-primary:hover, .btn-submit:hover,
+.btn-save:hover, .btn-export:hover, .btn-pdf:hover, .refresh-btn:hover,
+.gps-btn-main:hover, .gps-btn:hover, .m-btn:hover, .expense-btn:hover,
+.btn-approve:hover, .btn-resolve:hover, .action-btn:hover, .btn-block:hover {
+    background: var(--c-primary-hover);
+    color: #fff;
+    text-decoration: none;
+}
+
+.btn:active, .btn-main:active, .btn-primary:active, .btn-submit:active {
+    background: var(--c-primary-active);
+    transform: translateY(.5px);
+}
+
+.btn:focus-visible,
+.btn-main:focus-visible,
+.btn-submit:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(30, 99, 216, .18);
+}
+
+/* --- 3.2 次要按钮：白底 + 描边（层级低于主操作） --- */
+.btn-outline, .btn-ui-light, .btn-primary-soft, .btn-nav, .back-btn,
+.gps-btn-outline, .tab-btn, .btn-close {
+    background: var(--c-surface);
+    color: var(--c-text-body);
+    border-color: var(--c-border-strong);
+}
+
+.btn-outline:hover, .btn-ui-light:hover, .btn-primary-soft:hover,
+.btn-nav:hover, .back-btn:hover, .gps-btn-outline:hover,
+.tab-btn:hover, .btn-close:hover {
+    background: var(--c-surface-2);
+    color: var(--c-primary);
+    border-color: var(--c-primary-soft-border);
+}
+
+/* 次要按钮里的强调变体（原 .btn-primary-soft） */
+.btn-primary-soft {
+    background: var(--c-primary-soft);
+    color: var(--c-primary);
+    border-color: var(--c-primary-soft-border);
+}
+.btn-primary-soft:hover { background: #e4edff; color: var(--c-primary-active); }
+
+/* --- 3.3 危险操作：浅红底红字，不做大面积实心红 --- */
+.btn-delete, .btn-reject {
+    background: var(--c-danger-soft);
+    color: var(--c-danger);
+    border-color: #fbd5d1;
+    height: 28px;
+    padding: 0 10px;
+    font-size: 12px;
+}
+.btn-delete:hover, .btn-reject:hover {
+    background: #fde3e0;
+    color: #b42318;
+    border-color: #f7b9b3;
+}
+
+/* --- 3.4 选中态的标签按钮（.tab-btn.active） --- */
+.tab-btn.active {
+    background: var(--c-primary-soft);
+    color: var(--c-primary);
+    border-color: var(--c-primary-soft-border);
+    font-weight: 600;
+}
+
+/* --- 3.5 图标型圆形按钮保持形状，但统一配色 --- */
+.circle-btn, .btn-circle, .close-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    color: var(--c-text-muted);
+    border-radius: var(--r-pill);
+    transition: all .15s ease;
+}
+.circle-btn:hover, .btn-circle:hover, .close-btn:hover {
+    color: var(--c-primary);
+    border-color: var(--c-primary-soft-border);
+    background: var(--c-primary-soft);
+}
+
+/* --- 3.6 禁用态 --- */
+.btn:disabled, .btn-main:disabled, .btn-submit:disabled,
+button:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* --------------------------------------------------------------------------
+   4. 表单控件：统一高度 / 圆角 / 聚焦环
+   -------------------------------------------------------------------------- */
+input[type="text"], input[type="password"], input[type="number"],
+input[type="date"], input[type="tel"], input[type="email"],
+input[type="search"], input:not([type]), select, textarea {
+    font-family: inherit;
+    font-size: 14px;
+    color: var(--c-text-body);
+    background: var(--c-surface);
+    border: 1px solid var(--c-border-strong);
+    border-radius: var(--r);
+    padding: 8px 11px;
+    box-sizing: border-box;
+    transition: border-color .15s ease, box-shadow .15s ease;
+    outline: none;
+    height: 38px;
+}
+
+textarea { height: auto; min-height: 90px; line-height: 1.6; }
+
+/* 数字/文本输入框默认有最小宽度，放在 flex 行里会撑破容器，这里放开收缩 */
+input, select, textarea { min-width: 0; }
+
+input:hover, select:hover, textarea:hover { border-color: #b9c0ca; }
+
+input:focus, select:focus, textarea:focus {
+    border-color: var(--c-primary);
+    box-shadow: 0 0 0 3px rgba(30, 99, 216, .12);
+}
+
+input::placeholder, textarea::placeholder { color: var(--c-text-faint); }
+
+label {
+    color: var(--c-text-muted);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* --------------------------------------------------------------------------
+   5. 表格：统一的表头、行高、悬停
+   -------------------------------------------------------------------------- */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--c-surface);
+}
+
+th, td {
+    padding: 11px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--c-divider);
+    font-size: 13px;
+    vertical-align: middle;
+}
+
+th {
+    background: var(--c-surface-2);
+    color: var(--c-text-muted);
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: .02em;
+    border-bottom: 1px solid var(--c-border);
+    white-space: nowrap;
+}
+
+tbody tr { transition: background-color .12s ease; }
+tbody tr:hover { background: #f8fafc; }
+
+td small, td .sub { color: var(--c-text-faint); }
+
+/* --------------------------------------------------------------------------
+   6. 容器卡片：去重影、统一圆角与描边
+   -------------------------------------------------------------------------- */
+.card,
+.panel,
+.section,
+.module-content,
+.module-card,
+.menu-card,
+.truck-card,
+.stat-card {
+    background: var(--c-surface);
+    border: 1px solid var(--c-border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--sh-1);
+}
+
+.card:hover, .menu-card:hover, .module-card:hover {
+    box-shadow: var(--sh-2);
+}
+
+/* --------------------------------------------------------------------------
+   7. 状态标签：浅底 + 深字（不再用大面积高饱和实心色）
+   -------------------------------------------------------------------------- */
+.badge,
+.bg-red, .bg-orange, .bg-green,
+.badge-pending, .badge-done,
+.status-badge, .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: var(--r-pill);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.5;
+    border: 1px solid transparent;
+}
+
+.bg-red, .badge-danger {
+    background: var(--c-danger-soft);
+    color: var(--c-danger);
+    border-color: #fbd5d1;
+}
+
+.bg-orange, .badge-pending, .badge-warning {
+    background: var(--c-warning-soft);
+    color: var(--c-warning);
+    border-color: #fde3bf;
+}
+
+.bg-green, .badge-done, .badge-success {
+    background: var(--c-success-soft);
+    color: var(--c-success);
+    border-color: #c7e9dc;
+}
+
+/* --------------------------------------------------------------------------
+   8. 图标：统一使用 Bootstrap Icons，尺寸与基线对齐
+   -------------------------------------------------------------------------- */
+.bi {
+    font-size: 1em;
+    vertical-align: -.125em;
+    line-height: 1;
+}
+
+/* 卡片/菜单里的大图标 */
+.card .bi, .menu-card .bi, .module-card .bi,
+.icon, .truck-icon {
+    color: var(--c-primary);
+}
+
+/* 卡片文字统一为正文色，只有图标保留品牌色（避免满屏彩色文字） */
+.card { color: var(--c-text-body); }
+
+/* 统一大图标尺寸 */
+.card > .bi, .menu-card > .bi, .module-card > .bi,
+.card .card-icon, .menu-card .icon, .icon-box .bi {
+    font-size: 26px;
+    line-height: 1;
+    display: inline-block;
+}
+
+/* 卡片图标与文字的间距（替代原先 img 的 margin） */
+.card .card-icon { margin-bottom: 10px; }
+
+/* 按钮内的图标 */
+.btn .bi, .btn-main .bi, .btn-outline .bi, .btn-submit .bi {
+    font-size: 14px;
+    vertical-align: 0;
+}
+
+/* --------------------------------------------------------------------------
+   9. 应用栏（首页等入口页使用）
+   -------------------------------------------------------------------------- */
+.appbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    background: var(--c-surface);
+    border-bottom: 1px solid var(--c-border);
+    box-shadow: var(--sh-1);
+    padding: 12px 24px;
+    position: sticky;
+    top: 0;
+    z-index: 300;
+}
+
+.appbar-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.appbar-right { display: flex; align-items: center; gap: 8px; }
+
+.appbar-logo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: var(--r);
+    background: var(--c-primary-soft);
+    color: var(--c-primary);
+    font-size: 18px;
+    flex: none;
+}
+
+.appbar-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--c-text);
+    letter-spacing: -.01em;
+    line-height: 1.3;
+}
+
+.appbar-sub {
+    font-size: 12px;
+    color: var(--c-text-faint);
+    line-height: 1.3;
+}
+
+/* 应用栏里的次要按钮 */
+.appbar .langBtn,
+.appbar .logoutBtn {
+    position: static;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: var(--r);
+    border: 1px solid var(--c-border-strong);
+    background: var(--c-surface);
+    color: var(--c-text-body);
+    font-size: 13px;
+    font-family: inherit;
+    box-shadow: none;
+    cursor: pointer;
+    transition: all .15s ease;
+}
+
+.appbar .langBtn:hover,
+.appbar .logoutBtn:hover {
+    color: var(--c-primary);
+    border-color: var(--c-primary-soft-border);
+    background: var(--c-primary-soft);
+}
+
+/* --------------------------------------------------------------------------
+   10. 页内标题与返回链接
+   -------------------------------------------------------------------------- */
+.page-title {
+    font-size: 17px !important;
+    font-weight: 600 !important;
+    color: var(--c-text);
+    letter-spacing: -.01em;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.back-link,
+.btn-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--c-text-muted) !important;
+    text-decoration: none !important;
+    padding: 0 !important;
+    height: auto !important;
+    border: 0 !important;
+    background: none !important;
+}
+
+.back-link:hover, .btn-link:hover { color: var(--c-primary) !important; }
+
+/* --------------------------------------------------------------------------
+   11. 标签页：下划线式（不再用方框）
+   -------------------------------------------------------------------------- */
+/* 通用文字型页签（.tab / .view-tabs 等） */
+.tab {
+    color: var(--c-text-muted);
+    border-radius: var(--r);
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color .15s ease, color .15s ease;
+    background: none;
+    border: 0;
+}
+
+.tab:hover { color: var(--c-primary); background: var(--c-surface-2); }
+
+.tab.active {
+    color: var(--c-primary);
+    background: var(--c-primary-soft);
+    font-weight: 600;
+}
+
+.nav-tabs {
+    border-bottom: 1px solid var(--c-border) !important;
+    gap: 4px;
+}
+
+.nav-tabs .nav-link {
+    border: 0 !important;
+    border-bottom: 2px solid transparent !important;
+    background: none !important;
+    color: var(--c-text-muted) !important;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 12px !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+}
+
+.nav-tabs .nav-link:hover {
+    color: var(--c-primary) !important;
+    background: none !important;
+}
+
+.nav-tabs .nav-link.active {
+    color: var(--c-primary) !important;
+    border-bottom-color: var(--c-primary) !important;
+    background: none !important;
+    font-weight: 600;
+}
+
+/* 副色余额卡（美金账户）：与主卡同为深色系，但用绿区分，不引入第三个色相 */
+.balance-card.balance-card--alt {
+    background: linear-gradient(135deg, #12805c 0%, #0b5f44 100%) !important;
+}
+
+/* 固定在右上角的语言切换：与头部视觉对齐，不遮挡内容 */
+.langSwitch {
+    position: fixed;
+    top: 14px;
+    right: 20px;
+    z-index: 320;
+}
+
+.langSwitch .langBtn {
+    height: 32px;
+    padding: 0 12px;
+    border-radius: var(--r);
+    border: 1px solid var(--c-border-strong);
+    background: var(--c-surface);
+    color: var(--c-text-body);
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    box-shadow: none;
+    transition: all .15s ease;
+}
+
+.langSwitch .langBtn:hover {
+    color: var(--c-primary);
+    border-color: var(--c-primary-soft-border);
+    background: var(--c-primary-soft);
+}
+
+/* --------------------------------------------------------------------------
+   12. 通用小工具
+   -------------------------------------------------------------------------- */
+.ui-muted { color: var(--c-text-muted); }
+.ui-faint { color: var(--c-text-faint); }
+.ui-divider { height: 1px; background: var(--c-border); border: 0; margin: 16px 0; }
+
+/* 空容器不占位（避免筛选条下方出现空白条） */
+#summary:empty, .summary:empty, .card:empty { display: none !important; }
+
+/* --------------------------------------------------------------------------
+   12. 表单栅格：防止 1fr 被内容撑破导致横向溢出
+   -------------------------------------------------------------------------- */
+.form-grid, .form-row, .grid {
+    min-width: 0;
+    max-width: 100%;
+}
+
+/* 关键：轨道最小值不超过容器宽度，否则 4 列会撑破卡片 */
+.form-grid, .form-row {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)) !important;
+}
+
+.form-grid > *, .form-row > *, .form-group, .grid > * {
+    min-width: 0;
+}
+
+.form-group input, .form-group select, .form-group textarea {
+    max-width: 100%;
+}
+
+/* 分节标题：去彩色，用层级与分隔线代替（表单向导式） */
+.section-title {
+    font-size: 15px !important;
+    font-weight: 600 !important;
+    color: var(--c-text) !important;
+    letter-spacing: -.01em;
+    margin: 0 0 14px !important;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--c-divider);
+}
+
+/* 弹窗：统一圆角与头部留白 */
+.modal-content {
+    border: none !important;
+    border-radius: var(--r-lg) !important;
+    box-shadow: var(--sh-3) !important;
+}
+
+/* Fleetcost 的余额卡：收敛为品牌色单一渐变 */
+.balance-card {
+    background: linear-gradient(135deg, var(--c-primary) 0%, var(--c-primary-active) 100%) !important;
+    border-radius: var(--r-lg) !important;
+    padding: 18px 20px !important;
+    box-shadow: var(--sh-2);
+}
+.balance-card.green,
+.balance-card.usd {
+    background: linear-gradient(135deg, #12805c 0%, #0b5f44 100%) !important;
+}

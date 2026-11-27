@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="utf-8">
-    <title>车队财务管理系统 - 优化版</title>
+    <title>车队财务与票据 - TMS</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
@@ -11,7 +11,7 @@
         body { background: #f8f9fa; font-family: 'Segoe UI', Arial, sans-serif; font-size: 14px; color: #333; } /* 增大整体字号 */
         .card { border: none; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); } /* 增强阴影，使更专业 */
         /* 顶部余额看板 */
-        .balance-card { background: linear-gradient(135deg, #1e63d8, #0042b3); color: white; padding: 20px; border-radius: 12px; height: 100%; } /* 增大padding */
+        .balance-card { background: linear-gradient(135deg, var(--c-primary), var(--c-primary-active)); color: white; padding: 20px; border-radius: 12px; height: 100%; } /* 增大padding */
         .balance-title { font-size: 0.9rem; opacity: 0.8; }
         .balance-val { font-size: 1.6rem; font-weight: bold; margin-bottom: 8px; } /* 增大余额字体 */
         .balance-sub { font-size: 0.8rem; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 8px; }
@@ -19,7 +19,7 @@
         /* UI 浅色调按钮 */
         .btn-ui-light { background-color: #f0f4f8; border: 1px solid #d1d9e6; color: #4a5568; }
         .btn-ui-light:hover { background-color: #e2e8f0; }
-        .btn-primary-soft { background-color: #e0eaff; color: #1e63d8; border: none; }
+        .btn-primary-soft { background-color: #e0eaff; color: var(--c-primary); border: none; }
         .btn-primary-soft:hover { background-color: #c7d2fe; }
         
         /* 列表区域 */
@@ -28,8 +28,8 @@
         .table td { font-size: 0.85rem; vertical-align: middle; } /* 调整表格内容字号 */
         
         /* 状态标签 */
-        .badge-pending { background-color: #fff3cd; color: #856404; }
-        .badge-done { background-color: #d1e7dd; color: #0f5132; }
+        .badge-pending { background-color: #fff3cd; color: var(--c-warning); }
+        .badge-done { background-color: #d1e7dd; color: var(--c-success); }
 
         .lang-switch { position: fixed; top: 15px; right: 20px; z-index: 1050; }
         .vehicle-tag-box { border: 1px solid #dee2e6; padding: 10px; border-radius: 6px; max-height: 120px; overflow-y: auto; background: #fff; }
@@ -51,23 +51,22 @@
         /* 遮罩生效期间禁止页面滚动，避免透过边缘看到内容 */
         body.fin-guard { overflow: hidden; }
     </style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="stylesheet" href="assets/css/theme.css">
 </head>
 <body>
-
-<div class="lang-switch">
-    <button class="btn btn-sm btn-ui-light" onclick="toggleLang()" id="langBtn">English</button>
-</div>
 
 <div class="container-fluid p-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h4 class="fw-bold m-0" id="t-main-title">车队财务与票据管理系统</h4>
-            <a href="index.html" class="btn btn-sm btn-link p-0 mt-1" id="t-back">返回主页</a>
+            <h4 class="page-title" id="t-main-title">车队财务与票据</h4>
+            <a href="index.html" class="back-link mt-1" id="t-back"><i class="bi bi-arrow-left"></i> 返回主页</a>
         </div>
         <div class="d-flex gap-2">
             <button class="btn btn-primary-soft px-4" data-bs-toggle="modal" data-bs-target="#rechargeModal" id="t-btn-recharge">充值</button>
             <button class="btn btn-ui-light px-4" data-bs-toggle="modal" data-bs-target="#spendModal" id="t-btn-spend">费用录入</button>
             <button class="btn btn-ui-light" onclick="exportExcel()" id="t-btn-export">导出全部数据</button>
+            <button class="btn btn-ui-light" onclick="toggleLang()" id="langBtn">English</button>
         </div>
     </div>
 
@@ -90,7 +89,7 @@
             </div>
         </div>
         <div class="col-md-6">
-            <div class="balance-card" style="background: linear-gradient(135deg, #0d9488, #0f766e);">
+            <div class="balance-card balance-card--alt">
                 <div class="balance-title" id="t-bal-usd-title">美金账户 (USD)</div>
                 <div class="balance-val" id="balUSD">0.00</div>
                 <div class="row balance-sub">
@@ -124,7 +123,7 @@
                 <input type="text" id="filterReason" class="form-control form-control-sm shadow-none">
             </div>
             <div class="col-md-3 d-flex gap-2">
-                <button class="btn btn-sm btn-primary-soft w-100" onclick="applyFilters()" id="t-btn-filter">应用筛选</button>
+                <button class="btn btn-sm btn-primary w-100" onclick="applyFilters()" id="t-btn-filter">应用筛选</button>
                 <button class="btn btn-sm btn-ui-light w-100" onclick="resetFilters()" id="t-btn-reset">重置</button>
             </div>
         </div>
@@ -231,12 +230,12 @@
 <div class="modal fade" id="finAuthModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-sm modal-dialog-centered">
         <div class="modal-content p-3 border-0">
-            <h6 class="fw-bold mb-1">财务模块验证</h6>
-            <div class="small text-muted mb-3">该模块包含车队财务数据，请输入<b>财务密码</b>进入。（管理员免验证）</div>
+            <h6 class="fw-bold mb-1">财务验证</h6>
+            <div class="small text-muted mb-3">本页包含车队财务数据，请输入<b>财务密码</b>进入。（管理员免验证）</div>
             <label class="small text-muted">财务密码</label>
             <input type="password" id="finPassword" class="form-control mb-3 shadow-none" autocomplete="off"
                    onkeydown="if(event.key==='Enter'){event.preventDefault();handleFinLogin();}">
-            <button class="btn btn-primary w-100" id="finLoginBtn" onclick="handleFinLogin()">进入财务模块</button>
+            <button class="btn btn-primary w-100" id="finLoginBtn" onclick="handleFinLogin()">进入财务</button>
             <button class="btn btn-ui-light w-100 mt-2" onclick="location.href='index.html'">返回主页</button>
         </div>
     </div>
@@ -373,7 +372,7 @@ window.onload = () => {
 
     // 2) 访客：财务模块一律拒绝
     if (role === 'viewer') {
-        alert('权限不足：访客无法访问财务模块。');
+        alert('权限不足：访客无法访问财务数据。');
         location.replace('index.html');
         return;
     }
@@ -398,7 +397,7 @@ window.onload = () => {
 let lang = 'zh';
 const i18n = {
     zh: {
-        'main-title': '车队财务与票据管理系统', 'back': '返回主页', 'btn-recharge': '充值', 'btn-spend': '费用录入', 'btn-export': '导出全部数据',
+        'main-title': '车队财务与票据', 'back': '返回主页', 'btn-recharge': '充值', 'btn-spend': '费用录入', 'btn-export': '导出全部数据',
         'bal-zmw-title': '克瓦查账户 (ZMW)', 'bal-usd-title': '美金账户 (USD)', 'sub-rec': '累计充值:', 'sub-spd': '待回收支出:', 'sub-inv': '已入账票据:', 'sub-rec2': '累计充值:', 'sub-spd2': '累计支出:',
         'f-date': '日期筛选', 'f-plate': '车牌检索', 'f-user': '申请人', 'f-reason': '事由关键字搜索', 'btn-filter': '应用筛选', 'btn-reset': '重置',
         'tab-pending': '待回收支出 (ZMW)', 'tab-done': '已入账明细 (ZMW)', 'tab-usd': '美金支出 (USD)', 'tab-recharge': '充值历史记录',

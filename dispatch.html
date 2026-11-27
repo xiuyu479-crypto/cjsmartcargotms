@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial;background:linear-gradient(135deg,#e9f3ff 0%,#dbe9ff 100%);color:#123}
-.header{padding:20px;text-align:center;color:#1f4e92;font-weight:600;font-size:22px}
+.header{padding:20px;text-align:center;color:var(--c-text);font-weight:600;font-size:22px}
 .container{max-width:980px;margin:18px auto;padding:14px}
 .card{background:rgba(255,255,255,0.78);backdrop-filter:blur(10px);border-radius:14px;padding:14px;margin-bottom:14px;box-shadow:0 8px 20px rgba(0,0,0,0.08)}
 .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
@@ -14,12 +14,12 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Hel
 .input, textarea, select{width:100%;padding:10px;border-radius:10px;border:1px solid rgba(30,99,216,0.12);box-sizing:border-box;background:rgba(255,255,255,0.9)}
 textarea{min-height:120px}
 .actions{display:flex;gap:12px;justify-content:center;margin-top:10px}
-.btn{padding:12px 18px;border-radius:12px;border:none;background:#1e63d8;color:#fff;font-weight:600;cursor:pointer;box-shadow:0 6px 14px rgba(30,99,216,0.12)}
-.btn.secondary{background:rgba(255,255,255,0.9);color:#1e63d8;border:1px solid rgba(30,99,216,0.12)}
+.btn{padding:12px 18px;border-radius:12px;border:none;background:var(--c-primary);color:#fff;font-weight:600;cursor:pointer;box-shadow:0 6px 14px rgba(30,99,216,0.12)}
+.btn.secondary{background:rgba(255,255,255,0.9);color:var(--c-primary);border:1px solid rgba(30,99,216,0.12)}
 .small{font-size:13px;padding:8px 10px;border-radius:10px}
-.fuelBox{padding:10px;border-radius:10px;background:rgba(255,255,255,0.95);font-weight:700;color:#d9534f;text-align:center}
+.fuelBox{padding:10px;border-radius:10px;background:rgba(255,255,255,0.95);font-weight:700;color:var(--c-danger);text-align:center}
 .langSwitch{position:fixed;top:14px;right:18px; z-index: 1000;}
-.langBtn{padding:8px 14px;border-radius:20px;border:none;background:rgba(255,255,255,0.6);cursor:pointer;color:#1e63d8;font-weight:bold;}
+.langBtn{padding:8px 14px;border-radius:20px;border:none;background:rgba(255,255,255,0.6);cursor:pointer;color:var(--c-primary);font-weight:bold;}
 .suggest-box {position: absolute;background: white;border: 1px solid #ddd;border-radius: 8px;z-index: 9999;max-height: 180px;overflow-y: auto;box-shadow: 0 4px 10px rgba(0,0,0,0.1);}
 .suggest-item {padding: 8px 12px;cursor: pointer;}
 .suggest-item:hover {background: #f0f4ff;}
@@ -35,25 +35,26 @@ textarea{min-height:120px}
 #qrcode { margin: 20px auto; width: 200px; height: 200px; background: #eee; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .url-box { 
   background: #f0f4ff; padding: 10px; border-radius: 8px; font-size: 12px; 
-  word-break: break-all; margin: 15px 0; border: 1px dashed #1e63d8; text-align: left;
+  word-break: break-all; margin: 15px 0; border: 1px solid var(--c-primary-soft-border); text-align: left;
 }
 
 @media(max-width:720px){.grid{grid-template-columns:1fr}}
 </style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="stylesheet" href="assets/css/theme.css">
 </head>
 <body>
 
 <div id="suggestContainer"></div>
 
-<div style="position:fixed;top:15px;left:15px;z-index:999;">
-  <button onclick="window.location.href='neworders.html'" class="btn secondary small" data-key="backToList">返回列表</button>
-</div>
-
 <div class="langSwitch">
   <button class="langBtn" id="langToggle">English</button>
 </div>
 
-<div class="header" id="pageTitle" data-key="pageTitle">派车单制作</div>
+<div class="header">
+  <button class="btn" onclick="window.location.href='neworders.html'"><i class="bi bi-arrow-left"></i> <span data-key="backToList">返回列表</span></button>
+  <h1 id="pageTitle" data-key="pageTitle">派车单制作</h1>
+</div>
 <div style="max-width:980px;margin:8px auto;padding:6px 14px">
   <strong data-key="dispatchOrderId">Dispatch Order:</strong> 
   <span id="orderIdDisplay" style="background:#fff;padding:6px 10px;border-radius:6px;border:1px solid #eee;margin-left:8px;font-weight:bold">--</span>
@@ -62,7 +63,7 @@ textarea{min-height:120px}
 <div class="container">
   <div class="card">
     <div style="display:flex;align-items:center;gap:12px">
-      <div style="width:40px;height:40px;background:#1e63d8;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold">TMS</div>
+      <div style="width:40px;height:40px;background:var(--c-primary);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold">TMS</div>
       <div>
         <div style="font-weight:700" id="titleMain" data-key="mainTitle">派车单 / Dispatch Order</div>
         <div class="note" id="subTitle" data-key="subTitle">请填写以下信息并选择操作</div>
@@ -73,9 +74,9 @@ textarea{min-height:120px}
   <div class="card">
     <div style="font-weight:700;margin-bottom:8px" id="basicTitle" data-key="basicInfo">基本信息</div>
     <div class="grid">
-      <div style="grid-column: 1 / -1; background: #f0f7ff; padding: 10px; border-radius: 8px; border: 1px dashed #1e63d8;">
-        <label style="color:#1e63d8; font-weight:bold;" data-key="orderTypeLabel">订单类型 (必选)</label>
-        <select id="orderType" class="input" style="border-color:#1e63d8;">
+      <div style="grid-column: 1 / -1; background: var(--c-primary-soft); padding: 10px; border-radius: 8px; border: 1px solid var(--c-primary-soft-border);">
+        <label style="color:var(--c-primary); font-weight:bold;" data-key="orderTypeLabel">订单类型 (必选)</label>
+        <select id="orderType" class="input" style="border-color:var(--c-primary);">
           <option value="" disabled selected data-key="selectTypeHolder">-- 请选择订单类型 --</option>
           <option value="cross_border" data-key="typeCross">跨境运输 (Cross-border)</option>
           <option value="domestic" data-key="typeDomestic">境内运输 (Domestic)</option>
@@ -143,7 +144,7 @@ textarea{min-height:120px}
 
 <div id="shareModal">
   <div class="modal-content">
-    <h3 style="color:#1e63d8;margin-top:0;" data-key="modalTitle">派车成功！</h3>
+    <h3 style="color:var(--c-primary);margin-top:0;" data-key="modalTitle">派车成功！</h3>
     <p style="font-size:14px;color:#666;" data-key="modalDesc">请将下方链接发送给司机，以便实时更新状态：</p>
     <div id="qrcode">
         <img id="qrImg" style="width:100%; height:100%; display:none;" />

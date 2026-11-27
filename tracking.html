@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>客户追踪门户管理 · TMS</title>
 <style>
-    :root { --primary: #1e63d8; --bg: #f5f7fb; }
+    :root { --primary: var(--c-primary); --bg: #f5f7fb; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); margin: 0; padding: 0; color: #333; }
     
     .header { background: #fff; padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
@@ -27,7 +27,7 @@
         background: var(--primary); color: white; border: none; padding: 10px 20px; 
         border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px;
     }
-    .action-btn:hover { background: #164ba0; }
+    .action-btn:hover { background: var(--c-primary-active); }
 
     /* Modal */
     .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
@@ -49,7 +49,7 @@
 
     .gps-icon-box {
         font-size: 50px;
-        color: #1e63d8;
+        color: var(--c-primary);
         margin-bottom: 20px;
     }
 
@@ -74,13 +74,13 @@
 
     /* 进入 GPS 按钮 */
     .gps-btn-main {
-        background-color: #1e63d8;
+        background-color: var(--c-primary);
         color: white;
         box-shadow: 0 4px 12px rgba(30, 99, 216, 0.3);
     }
 
     .gps-btn-main:hover {
-        background-color: #164eb0;
+        background-color: var(--c-primary-active);
         transform: translateY(-2px);
     }
 
@@ -102,12 +102,14 @@
         margin-top: 20px;
     }
 </style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="stylesheet" href="assets/css/theme.css">
 </head>
 <body>
 
 <div class="header">
-    <h2>📡 客户追踪门户管理</h2>
-    <a href="index.html" style="text-decoration:none; color:#666; font-size:14px;">返回首页</a>
+    <h2><i class="bi bi-broadcast-pin"></i> 客户追踪门户管理</h2>
+    <a href="index.html" class="back-link"><i class="bi bi-arrow-left"></i> 返回首页</a>
 </div>
 
 <div class="container" id="app">
@@ -117,9 +119,9 @@
 
 <!-- Integrated GPS Section -->
 <div class="gps-section">
-    <div class="gps-icon-box">📍</div>
+    <div class="gps-icon-box"><i class="bi bi-geo-alt"></i></div>
     <h2>GPS 车辆实时追踪</h2>
-    <p>点击下方按钮启动追踪系统。首次访问请在弹出窗口中登录，系统将自动记录您的登录凭据。</p>
+    <p>点击下方按钮启动追踪。首次访问请在弹出窗口中登录，将自动记录您的登录凭据。</p>
 
     <div class="gps-btn-group">
         <a href="https://app.ifleet.africa/#/login" class="gps-btn gps-btn-main">
@@ -127,7 +129,7 @@
         </a>
         
         <a href="index.html" class="gps-btn gps-btn-outline">
-            返回系统主页
+            返回主页
         </a>
     </div>
 
@@ -138,7 +140,7 @@
 
 <div class="modal" id="shareModal">
     <div class="modal-content">
-        <h3 style="margin-top:0; color:#1e63d8;">分享追踪链接</h3>
+        <h3 style="margin-top:0; color:var(--c-primary);">分享追踪链接</h3>
         <p style="font-size:14px; color:#666;">发送给 <b id="modalClientName">--</b> 以查看其实时订单</p>
         
         <div class="qr-box">
@@ -147,7 +149,7 @@
         
         <div class="link-box" id="shareLink">Generating...</div>
         
-        <button class="action-btn" style="width:100%; justify-content:center; margin-bottom:10px;" id="copyBtn">📋 复制链接</button>
+        <button class="action-btn" style="width:100%; justify-content:center; margin-bottom:10px;" id="copyBtn"><i class="bi bi-clipboard-data"></i> 复制链接</button>
         <button class="close-btn" onclick="document.getElementById('shareModal').style.display='none'">关闭</button>
     </div>
 </div>

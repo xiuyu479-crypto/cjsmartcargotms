@@ -7,12 +7,12 @@
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
     <style>
         :root { 
-            --primary: #1e63d8; 
-            --success: #27ae60; 
-            --warning: #ff9800;
-            --danger: #e74c3c;
+            --primary: var(--c-primary); 
+            --success: var(--c-success); 
+            --warning: var(--c-warning);
+            --danger: var(--c-danger);
             --gray: #e0e0e0;
-            --text: #2c3e50;
+            --text: var(--c-text);
             --bg: #f4f6f9;
             --card-bg: #ffffff;
             --shadow: 0 4px 12px rgba(0,0,0,0.08);
@@ -279,7 +279,7 @@
             transition: background 0.3s;
         }
         .btn:hover {
-            background: #0042b3;
+            background: var(--c-primary-active);
         }
 
         /* Media Queries for Desktop */
@@ -331,6 +331,8 @@
             }
         }
     </style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+<link rel="stylesheet" href="assets/css/theme.css">
 </head>
 <body>
 
@@ -477,7 +479,7 @@ function createOrderCard(order) {
         <div class="card-top">
             <div>
                 <div class="plate-no">
-                    <span class="truck-icon">🚛</span> 
+                    <span class="truck-icon"><i class="bi bi-truck"></i></span> 
                     ${order.tractor || 'N/A'}
                     <span class="status-badge ${currentStep >= totalSteps ? 'done' : 'active'}">
                         ${type === 'cross_border' ? 'INTL' : 'DOM'}
@@ -485,7 +487,7 @@ function createOrderCard(order) {
                 </div>
                 <div class="route-info">
                     ${order.pickupAddr ? order.pickupAddr.split(',')[0] : 'Origin'} 
-                    ➝ 
+                    <i class="bi bi-arrow-right"></i> 
                     ${order.dropoffAddr ? order.dropoffAddr.split(',')[0] : 'Dest'}
                 </div>
                 <div class="driver-info">
@@ -509,7 +511,7 @@ function createOrderCard(order) {
         
         ${order.hasActiveIssue ? `
         <div class="issue-alert">
-            <span>⚠️</span> Exception Reported. Please contact dispatch.
+            <span><i class="bi bi-exclamation-triangle"></i></span> Exception Reported. Please contact dispatch.
         </div>` : ''}
 
         <div class="update-time">
