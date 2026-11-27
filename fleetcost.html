@@ -36,6 +36,20 @@
 
         /* 新增删除按钮样式 */
         .btn-delete { font-size: 0.75rem; padding: 2px 6px; } /* 小型删除按钮 */
+
+        /* 财务验证遮罩：未通过验证时把整页磨砂化，防止余额/账目明细被读取或截图 */
+        body.fin-guard .modal-backdrop {
+            background-color: rgba(255, 255, 255, 0.88) !important;
+            opacity: 1 !important;
+            -webkit-backdrop-filter: blur(14px) saturate(0.5);
+            backdrop-filter: blur(14px) saturate(0.5);
+        }
+        /* 不支持 backdrop-filter 的旧浏览器：加厚遮罩兜底 */
+        @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+            body.fin-guard .modal-backdrop { background-color: rgba(255, 255, 255, 0.98) !important; }
+        }
+        /* 遮罩生效期间禁止页面滚动，避免透过边缘看到内容 */
+        body.fin-guard { overflow: hidden; }
     </style>
 </head>
 <body>
@@ -284,12 +298,19 @@ function clearFinAuth() {
 function showFinAuthModal() {
     const el = document.getElementById('finAuthModal');
     const modal = bootstrap.Modal.getOrCreateInstance(el);
+    // 先挂上 body 类再 show：遮罩层会按磨砂样式渲染，页面数据不可辨认
+    document.body.classList.add('fin-guard');
     modal.show();
     setTimeout(() => {
         const inp = document.getElementById('finPassword');
         if (inp) inp.focus();
     }, 400);
 }
+
+// 验证框关闭（验证通过或返回主页）后解除磨砂遮罩
+document.getElementById('finAuthModal')?.addEventListener('hidden.bs.modal', () => {
+    document.body.classList.remove('fin-guard');
+});
 
 // --- 财务密码验证：走后端 /api/finance-auth，前端不保存密码 ---
 async function handleFinLogin() {
