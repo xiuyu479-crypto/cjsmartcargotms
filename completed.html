@@ -170,8 +170,9 @@ function computeFinance(o) {
     const bonusVal = Number(fBonusObj.val || 0);
     const bonusUnit = fBonusObj.unit || 'ZMW';
     
-    // 修复：派车单手填的司机津贴(allowance)此前被完全忽略，导致路上成本漏算、毛利虚高
-    // 注意：allowance 无独立单位选择框，默认按 ZMW 折算
+    // 司机津贴(allowance)：业务口径已确认为【额外津贴】，与 Trip Money / Bonus 相加
+    //（不替代 fTrip，两者是不同性质的钱，故此处不做二选一）
+    // 单位固定为 ZMW（派车单无单位选择框，PDF 表头亦标注 ZMW），一律按当前汇率折 USD
     const allowanceVal = Number(o.allowance || 0);
     const allowanceUSD = allowanceVal / rate;
 

@@ -126,7 +126,7 @@ textarea{min-height:120px}
   <div class="card">
     <div style="font-weight:700;margin-bottom:8px" id="feesTitle" data-key="feesInfo">费用与备注</div>
     <div class="grid">
-      <div><label data-key="allowanceLabel">司机津贴 (ZMW/USD)</label><input id="allowance" class="input" type="number" value="0"></div>
+      <div><label data-key="allowanceLabel">司机津贴 (ZMW)</label><input id="allowance" class="input" type="number" value="0"></div>
       <div><label data-key="transitLabel">过境费用 (USD)</label><input id="transit" class="input" type="number" value="0"></div>
       <div style="grid-column:1 / -1"><label data-key="notesLabel">备注信息</label><textarea id="notes" class="input"></textarea></div>
     </div>
@@ -252,7 +252,7 @@ const langPack = {
     loadedFuelTotal: '重车油耗 (L)',
     totalFuel: '油料分配 (L)',
     feesInfo: '费用与备注',
-    allowanceLabel: '司机津贴 (ZMW/USD)', // Updated label
+    allowanceLabel: '司机津贴 (ZMW)', // 单位固定 ZMW，与 PDF 表头一致
     transitLabel: '过境费用 (USD)',
     notesLabel: '备注信息',
     saveDraft: '保存草稿',
@@ -299,7 +299,7 @@ const langPack = {
     loadedFuelTotal: 'Loaded Fuel (L)',
     totalFuel: 'Total Allocation (L)',
     feesInfo: 'Fees & Notes',
-    allowanceLabel: 'Allowance (ZMW/USD)', // Updated label
+    allowanceLabel: 'Allowance (ZMW)', // fixed ZMW, matches PDF header
     transitLabel: 'Transit Fee (USD)',
     notesLabel: 'Remarks / Notes',
     saveDraft: 'Save Draft',
