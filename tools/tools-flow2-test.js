@@ -23,7 +23,6 @@ const ok = (m, c) => { console.log((c ? 'PASS ' : 'FAIL ') + m); c ? pass++ : fa
     const dialogs = [];
     page.on('dialog', async d => { dialogs.push(d.message()); await d.accept(); });
 
-    let threadKey = null;
     try {
         /* ---------- 1. 司机端异常：类型 + 照片 ---------- */
         await put(`tms/orders/${ORDER_ID}`, {
@@ -106,42 +105,12 @@ const ok = (m, c) => { console.log((c ? 'PASS ' : 'FAIL ') + m); c ? pass++ : fa
         const licField = await page.$('#licenseExpiry');
         ok('司机表单新增证照字段', !!licField);
 
-        /* ---------- 5. 论坛 ---------- */
-        await page.goto(B + '/__boot?to=maintenance.html', { waitUntil: 'networkidle2' });
-        await new Promise(r => setTimeout(r, 1200));
-        await page.evaluate(() => openModule('m6', '讨论区'));
-        await new Promise(r => setTimeout(r, 600));
-        await page.evaluate(() => {
-            document.getElementById('fm_title').value = '自动化测试话题';
-            document.getElementById('fm_body').value = '测试内容：后桥异响处理经验';
-            postThread();
-        });
-        await new Promise(r => setTimeout(r, 1800));
-
-        const threads = Object.entries((await api('tms/forum_threads')) || {}).map(([k, v]) => ({ key: k, ...v }));
-        const th = threads.find(t => t.title === '自动化测试话题');
-        threadKey = th && th.key;
-        ok('论坛发帖成功', !!th && th.body.includes('后桥异响'));
-
-        await page.evaluate(k => {
-            document.getElementById('reply_' + k).value = '已更换后桥油封';
-            replyThread(k);
-        }, threadKey);
-        await new Promise(r => setTimeout(r, 1800));
-        const replies = Object.values(((await api('tms/forum_posts/' + threadKey)) || {}));
-        ok('论坛回复成功', replies.length === 1 && replies[0].body.includes('油封'));
-
-        const forumText = await page.evaluate(() => document.getElementById('forumList').innerText);
-        ok('论坛列表展示回复数', forumText.includes('1 条回复'));
     } catch (e) {
         console.log('异常：' + e.message);
         fail++;
     } finally {
         await del(`tms/orders/${ORDER_ID}`);
         await del(`tms/vehicles/${VEH_ID}`);
-        if (threadKey) { await del(`tms/forum_threads/${threadKey}`); await del(`tms/forum_posts/${threadKey}`); }
-        const threads = (await api('tms/forum_threads')) || {};
-        for (const [k, v] of Object.entries(threads)) if (String(v.title).includes('自动化测试')) await del(`tms/forum_threads/${k}`);
         const audit = (await api('tms/audit_logs')) || {};
         for (const [k, v] of Object.entries(audit)) if (JSON.stringify(v).includes('TEST-01')) await del(`tms/audit_logs/${k}`);
         console.log(`\n清理完成 · 通过 ${pass} 项，失败 ${fail} 项`);

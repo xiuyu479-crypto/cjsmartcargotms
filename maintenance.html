@@ -125,7 +125,6 @@ TMS.session.requireLogin();</script>
         <div class="menu-card" onclick="openModule('m5', '实时看板 / Live Status')"><span class="icon"><i class="bi bi-display"></i></span><h3>状态看板</h3><small>Fleet Board</small></div>
         <div class="menu-card" onclick="openModule('m7', '配件台账 / Parts Inventory')"><span class="icon"><i class="bi bi-box-seam"></i></span><h3>配件台账</h3><small>Inventory</small></div>
         <div class="menu-card" onclick="openModule('m8', '维修报表 / Maintenance Report')"><span class="icon"><i class="bi bi-bar-chart"></i></span><h3>维修报表</h3><small>Report</small></div>
-        <div class="menu-card" onclick="openModule('m6', '维修讨论区 / Forum')"><span class="icon"><i class="bi bi-chat-dots"></i></span><h3>讨论区</h3><small>Forum</small></div>
     </div>
 
     <div id="m1" class="module-content">
@@ -176,9 +175,8 @@ TMS.session.requireLogin();</script>
             <div class="field"><label>累计时长 / Duration</label><div id="m3_timerDisplay" style="font-size:1.5rem; font-weight:bold; color:var(--danger)">0.00 Hours</div></div>
             <div class="field"><label>出厂里程 / Release km</label><input type="number" id="m3_outOdo"></div>
             <div class="field"><label>机修名字 / Mechanic Name</label><input type="text" id="m3_finalTech"></div>
-            <div class="field full"><label>消耗配件汇总 / Final Parts</label><textarea id="m3_finalParts"></textarea></div>
-            <div class="field full">
-                <label>配件消耗登记（可选，保存时自动扣减库存） / Parts Used</label>
+            <div class="field" style="grid-column:1/-1"><label>消耗配件汇总 / Final Parts</label><textarea id="m3_finalParts"></textarea></div>
+            <div class="field" style="grid-column:1/-1">
                 <div id="m3_partRows"></div>
                 <button type="button" class="refresh-btn" style="background:var(--c-success);margin-top:8px" onclick="addPartRow()">+ 添加配件</button>
             </div>
@@ -207,7 +205,7 @@ TMS.session.requireLogin();</script>
     <div id="m7" class="module-content">
         <h3>配件台账 / Parts Inventory</h3>
         <div class="form-grid">
-            <div class="field"><label>配件名称 <span>*</span></label><input type="text" id="pt_name" placeholder="如: 机油滤芯"></div>
+            <div class="field"><label>配件名称 <span>*</span></label><input type="text" id="pt_name"></div>
             <div class="field"><label>规格 / SKU</label><input type="text" id="pt_sku"></div>
             <div class="field"><label>单位</label><input type="text" id="pt_unit" placeholder="个 / 桶 / 套" value="个"></div>
             <div class="field"><label>单价 (ZMW)</label><input type="number" id="pt_price" step="0.01"></div>
@@ -226,7 +224,7 @@ TMS.session.requireLogin();</script>
 
         <h3 style="margin-top:26px">出入库记录 / Stock Movements</h3>
         <div style="display:flex;gap:10px;margin-bottom:10px">
-            <input type="text" id="mvFilter" placeholder="按配件名/车牌搜索" style="max-width:240px">
+            <input type="text" id="mvFilter" style="max-width:240px">
             <button class="refresh-btn" onclick="renderMoves()">搜索</button>
         </div>
         <table>
@@ -258,18 +256,6 @@ TMS.session.requireLogin();</script>
         <table><thead><tr><th>配件</th><th>数量</th><th>金额 (ZMW)</th></tr></thead><tbody id="rpParts"></tbody></table>
     </div>
 
-    <div id="m6" class="module-content">
-        <h3>维修讨论区 / Forum</h3>
-        <div class="form-grid">
-            <div class="field full"><label>标题 <span>*</span></label><input type="text" id="fm_title" placeholder="如: BAL9570ZM 后桥异响"></div>
-            <div class="field full"><label>内容 <span>*</span></label><textarea id="fm_body" placeholder="描述现象、处理方式、经验..."></textarea></div>
-        </div>
-        <div class="btn-group">
-            <button class="btn-submit" onclick="postThread()">发布 / Post</button>
-            <button class="btn-pdf" onclick="renderForum()">刷新 / Refresh</button>
-        </div>
-        <div id="forumList" style="margin-top:18px"></div>
-    </div>
 </div>
 
 <script type="module">
@@ -294,20 +280,14 @@ let boardTimer = null;
 
 const PARTS_PATH = 'tms/parts_catalog';
 const MOVES_PATH = 'tms/parts_moves';
-const FORUM_PATH = 'tms/forum_threads';
-const FORUM_REPLY_PATH = 'tms/forum_posts';
 
 let PARTS = {};
 let MOVES = {};
-let THREADS = {};
-let REPLIES = {};
 
 TMS.audit.bind(p => push(ref(db, 'tms/audit_logs'), p));
 
 onValue(ref(db, PARTS_PATH), s => { PARTS = s.val() || {}; if (isModuleOpen('m7')) renderPartTable(); });
 onValue(ref(db, MOVES_PATH), s => { MOVES = s.val() || {}; if (isModuleOpen('m7')) renderMoves(); if (isModuleOpen('m8')) renderReport(); });
-onValue(ref(db, FORUM_PATH), s => { THREADS = s.val() || {}; if (isModuleOpen('m6')) renderForum(); });
-onValue(ref(db, FORUM_REPLY_PATH), s => { REPLIES = s.val() || {}; if (isModuleOpen('m6')) renderForum(); });
 
 function isModuleOpen(id) {
     const el = document.getElementById(id);
@@ -336,7 +316,6 @@ async function refreshData(moduleId) {
     if(moduleId === 'm2') renderWarnings();
     if(moduleId === 'm4') renderPartsLog();
     if(moduleId === 'm5') startLiveBoard();
-    if(moduleId === 'm6') renderForum();
     if(moduleId === 'm7') { renderPartTable(); renderMoves(); }
     if(moduleId === 'm8') renderReport();
 }
@@ -635,7 +614,7 @@ function renderPartTable() {
     if (!tbody) return;
     const keys = Object.keys(PARTS);
     if (!keys.length) {
-        tbody.innerHTML = '<tr><td colspan="7" class="empty">还没有配件，请先在上方建档</td></tr>';
+        tbody.innerHTML = '';
         return;
     }
     tbody.innerHTML = keys.map(k => {
@@ -778,8 +757,7 @@ window.renderReport = () => {
     }));
     const pRows = Object.entries(partAgg).sort((a, b) => b[1].cost - a[1].cost).slice(0, 10);
     document.getElementById('rpParts').innerHTML = pRows.length ? pRows.map(([k, v]) => `
-        <tr><td>${k}</td><td>${v.qty}</td><td>${v.cost.toFixed(2)}</td></tr>`).join('')
-        : '<tr><td colspan="3" class="empty">无结构化配件记录（旧工单只有文字描述）</td></tr>';
+        <tr><td>${k}</td><td>${v.qty}</td><td>${v.cost.toFixed(2)}</td></tr>`).join('') : '';
 };
 
 window.exportReport = () => {
@@ -795,90 +773,6 @@ window.exportReport = () => {
     });
     TMS.util.download(`Maintenance_${TMS.util.today()}.csv`, csv);
 };
-
-/* ============================================================
-   讨论区
-   ============================================================ */
-window.postThread = async () => {
-    const title = document.getElementById('fm_title').value.trim();
-    const body = document.getElementById('fm_body').value.trim();
-    if (!title || !body) { alert('请填写标题和内容'); return; }
-
-    await push(ref(db, FORUM_PATH), {
-        title: title, body: body,
-        author: TMS.session.name() || TMS.session.role(),
-        at: Date.now(),
-        replyCount: 0,
-        lastAt: Date.now()
-    });
-    document.getElementById('fm_title').value = '';
-    document.getElementById('fm_body').value = '';
-};
-
-window.replyThread = async (tid) => {
-    const input = document.getElementById('reply_' + tid);
-    if (!input) return;
-    const text = input.value.trim();
-    if (!text) return;
-    const thread = THREADS[tid] || {};
-    await push(ref(db, FORUM_REPLY_PATH + '/' + tid), {
-        body: text,
-        author: TMS.session.name() || TMS.session.role(),
-        at: Date.now()
-    });
-    await update(ref(db, FORUM_PATH + '/' + tid), {
-        replyCount: (Number(thread.replyCount) || 0) + 1,
-        lastAt: Date.now()
-    });
-    input.value = '';
-};
-
-window.delThread = async (tid) => {
-    if (!confirm('删除该话题及其回复？')) return;
-    await remove(ref(db, FORUM_PATH + '/' + tid));
-    await remove(ref(db, FORUM_REPLY_PATH + '/' + tid));
-};
-
-function renderForum() {
-    const box = document.getElementById('forumList');
-    if (!box) return;
-    const threads = Object.keys(THREADS).map(k => Object.assign({ _key: k }, THREADS[k]))
-        .sort((a, b) => Number(b.lastAt || b.at) - Number(a.lastAt || a.at));
-
-    if (!threads.length) {
-        box.innerHTML = '<div class="empty">还没有话题，发布第一条维修经验吧。</div>';
-        return;
-    }
-
-    box.innerHTML = threads.map(t => {
-        const replies = Object.keys(REPLIES[t._key] || {})
-            .map(k => Object.assign({ _key: k }, REPLIES[t._key][k]))
-            .sort((a, b) => Number(a.at) - Number(b.at));
-        const replyHtml = replies.map(r => `
-            <div style="padding:8px 10px;border-left:3px solid var(--c-border);margin:8px 0 8px 6px;background:#fafbfc">
-                <div style="font-size:12px;color:#94a3b8">${r.author || '-'} · ${TMS.util.dt(r.at)}</div>
-                <div style="font-size:13px;white-space:pre-wrap">${escapeHtml(r.body || '')}</div>
-            </div>`).join('');
-
-        return `<div class="module-content active-module" style="display:block;margin-bottom:14px;padding:16px;background:#fff;border:1px solid #e2e8f0;border-radius:12px">
-            <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
-                <div>
-                    <div style="font-weight:700;font-size:15px">${escapeHtml(t.title || '')}</div>
-                    <div style="font-size:12px;color:#94a3b8;margin-top:2px">
-                        ${escapeHtml(t.author || '-')} · ${TMS.util.dt(t.at)} · ${replies.length} 条回复
-                    </div>
-                </div>
-                <button class="btn-nav" style="background:var(--c-danger-soft);color:var(--c-danger)" onclick="delThread('${t._key}')">删除</button>
-            </div>
-            <div style="margin:10px 0;font-size:13px;white-space:pre-wrap">${escapeHtml(t.body || '')}</div>
-            ${replyHtml}
-            <div style="display:flex;gap:8px;margin-top:10px">
-                <input id="reply_${t._key}" placeholder="回复..." style="flex:1;padding:9px;border:1px solid #cbd5e1;border-radius:8px">
-                <button class="refresh-btn" style="margin:0" onclick="replyThread('${t._key}')">回复</button>
-            </div>
-        </div>`;
-    }).join('');
-}
 
 function escapeHtml(s) {
     return String(s === null || s === undefined ? '' : s)
