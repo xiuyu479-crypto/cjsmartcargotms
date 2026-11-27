@@ -75,6 +75,7 @@ body {
 
 /* Card Style */
 .card {
+    position:relative;
     background:rgba(255,255,255,0.7);
     backdrop-filter: blur(12px);
     border-radius:20px;
@@ -102,6 +103,36 @@ body {
     height:44px;
     margin-bottom:12px;
     opacity:0.9;
+}
+
+/* 右上角消息提醒角标 */
+.card-badge {
+    position:absolute;
+    top:9px;
+    right:9px;
+    min-width:20px;
+    height:20px;
+    padding:0 6px;
+    border-radius:999px;
+    background:var(--c-danger);
+    color:#fff;
+    font-size:11px;
+    font-weight:700;
+    line-height:20px;
+    text-align:center;
+    letter-spacing:0;
+    box-shadow:0 0 0 2px #fff, 0 2px 6px rgba(217,45,32,.35);
+    display:none;
+    pointer-events:none;
+    z-index:2;
+}
+.card-badge.show {
+    display:inline-block;
+    animation:badgePop .22s ease-out;
+}
+@keyframes badgePop {
+    from { transform:scale(.65); }
+    to   { transform:scale(1); }
 }
 </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
@@ -288,16 +319,235 @@ function applyLang(){
     updateCard("btn9", t.btn9, "receipt");
     updateCard("btn10", t.btn10, "geo-alt");
     updateCard("btnClients", t.btnClients, "people");
+
+    // 语言切换后同步刷新右上角角标的提示文案
+    if (typeof renderBadges === 'function') renderBadges();
 }
 
 function updateCard(id, text, iconName){
     const el = document.getElementById(id);
     if(el){
+        // 保留右上角消息角标节点，语言切换重绘内容时不丢失
+        const badge = el.querySelector('.card-badge');
         el.innerHTML = `<i class="bi bi-${iconName} card-icon"></i>${text}`;
+        if(badge) el.appendChild(badge);
     }
 }
 
 window.onload = applyLang;
+</script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script>
+/* ==========================================================================
+   首页模块右上角消息提醒
+   口径：
+     btn1 派车单制作  → tms/dispatch 中 status === 'pending'（新建订单里的待发车）
+     btn2 动态监控    → 司机端待处理异常（tms/orders.hasActiveIssue）+ 司机端费用申请（tms/oa/driver_expenses 待审批）
+     btn4 OA流程申请  → tms/oa 下 5 个模块待审批合计
+     btn5 已完成订单  → tms/completed_orders 中 archivedAt 为今天的数量
+     btn6 车辆维护    → tms/vehicles 中 maintaining === true（正在维护）
+   其它模块不显示角标。
+   ========================================================================== */
+const badgeFirebaseConfig = {
+    apiKey: "AIzaSyDEbePpsrXwD8Okqa93UOGUFE37c8SFHS0",
+    authDomain: "cjsmartcargo-datebase.firebaseapp.com",
+    databaseURL: "https://cjsmartcargo-datebase-default-rtdb.firebaseio.com",
+    projectId: "cjsmartcargo-datebase"
+};
+let badgeDb = null;
+try {
+    firebase.initializeApp(badgeFirebaseConfig);
+    badgeDb = firebase.database();
+} catch (e) {
+    console.warn('[badge] Firebase 初始化失败，首页角标停用', e);
+}
+
+const BADGE_CARDS = { btn1: 'dispatch', btn2: 'monitor', btn4: 'oa', btn5: 'completed', btn6: 'maintenance' };
+
+const badgeState = {
+    dispatchPending: 0,
+    issueOrders: 0,
+    issueRows: 0,
+    driverExpPending: 0,
+    oaPending: 0,
+    oaBreakdown: { driver: 0, public: 0, vehicle: 0, leave: 0, outing: 0 },
+    maintaining: 0,
+    completedToday: 0
+};
+
+const badgeEls = {};
+
+function badgeCount(key) {
+    const s = badgeState;
+    if (key === 'dispatch') return s.dispatchPending;
+    if (key === 'monitor') return s.issueOrders + s.driverExpPending;
+    if (key === 'oa') return s.oaPending;
+    if (key === 'maintenance') return s.maintaining;
+    if (key === 'completed') return s.completedToday;
+    return 0;
+}
+
+function badgeTip(key) {
+    const s = badgeState;
+    const en = (typeof currentLang !== 'undefined' && currentLang === 'en');
+    const b = s.oaBreakdown;
+
+    if (key === 'dispatch') {
+        return en
+            ? `${s.dispatchPending} order(s) waiting for dispatch`
+            : `新建订单待发车 ${s.dispatchPending} 单`;
+    }
+    if (key === 'monitor') {
+        return en
+            ? `${s.issueOrders} active issue(s) / ${s.driverExpPending} expense request(s) from drivers`
+            : `司机端待处理异常 ${s.issueOrders} 单（${s.issueRows} 条）· 费用申请 ${s.driverExpPending} 笔`;
+    }
+    if (key === 'oa') {
+        return en
+            ? `${s.oaPending} pending approval(s)`
+            : `待审批 ${s.oaPending} 件（司机费用 ${b.driver}、公共费用 ${b.public}、车辆使用 ${b.vehicle}、请假 ${b.leave}、外出 ${b.outing}）`;
+    }
+    if (key === 'maintenance') {
+        return en
+            ? `${s.maintaining} vehicle(s) in maintenance`
+            : `正在维护 ${s.maintaining} 台`;
+    }
+    if (key === 'completed') {
+        return en
+            ? `${s.completedToday} order(s) completed today`
+            : `今日已完成 ${s.completedToday} 单`;
+    }
+    return '';
+}
+
+function renderBadges() {
+    Object.keys(BADGE_CARDS).forEach(id => {
+        const el = badgeEls[id];
+        if (!el) return;
+
+        const key = BADGE_CARDS[id];
+        const n = badgeCount(key);
+
+        if (n > 0) {
+            el.textContent = n > 99 ? '99+' : String(n);
+            el.title = badgeTip(key);
+            el.setAttribute('aria-label', el.title);
+            el.classList.add('show');
+        } else {
+            el.classList.remove('show');
+            el.removeAttribute('title');
+            el.removeAttribute('aria-label');
+        }
+    });
+}
+
+function mountBadges() {
+    Object.keys(BADGE_CARDS).forEach(id => {
+        const card = document.getElementById(id);
+        if (!card) return;
+        let el = card.querySelector('.card-badge');
+        if (!el) {
+            el = document.createElement('span');
+            el.className = 'card-badge';
+            card.appendChild(el);
+        }
+        badgeEls[id] = el;
+    });
+    renderBadges();
+}
+
+function badgeStartOfToday() {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+}
+
+let badgeCompletedRaw = {};
+
+function computeCompletedToday() {
+    const start = badgeStartOfToday();
+    const end = start + 24 * 60 * 60 * 1000;
+    let n = 0;
+    Object.keys(badgeCompletedRaw).forEach(k => {
+        const rec = badgeCompletedRaw[k] || {};
+        const ts = Number(rec.archivedAt);
+        if (ts && ts >= start && ts < end) n++;
+    });
+    badgeState.completedToday = n;
+    renderBadges();
+}
+
+/* ---------- 数据订阅 ---------- */
+function onBadgeData(path, handler) {
+    if (!badgeDb) return;
+    badgeDb.ref(path).on('value', snap => {
+        try {
+            handler(snap.val() || {});
+        } catch (e) {
+            console.warn('[badge] 处理失败:', path, e);
+        }
+    }, err => {
+        console.warn('[badge] 读取失败:', path, err && err.message);
+    });
+}
+
+onBadgeData('tms/dispatch', data => {
+    badgeState.dispatchPending = Object.keys(data).filter(k => data[k] && data[k].status === 'pending').length;
+    renderBadges();
+});
+
+onBadgeData('tms/orders', data => {
+    let orders = 0, rows = 0;
+    Object.keys(data).forEach(k => {
+        const o = data[k] || {};
+        if (!o.hasActiveIssue) return;
+        orders++;
+        rows += Array.isArray(o.issues) ? o.issues.length : 0;
+    });
+    badgeState.issueOrders = orders;
+    badgeState.issueRows = rows;
+    renderBadges();
+});
+
+onBadgeData('tms/oa', data => {
+    const mods = {
+        driver: 'driver_expenses',
+        public: 'public_expenses',
+        vehicle: 'vehicle_requests',
+        leave: 'leave_requests',
+        outing: 'outing_requests'
+    };
+    const breakdown = { driver: 0, public: 0, vehicle: 0, leave: 0, outing: 0 };
+    let total = 0;
+
+    Object.keys(mods).forEach(k => {
+        const node = data[mods[k]] || {};
+        const n = Object.keys(node).filter(id => node[id] && node[id].status === 'pending').length;
+        breakdown[k] = n;
+        total += n;
+    });
+
+    badgeState.oaPending = total;
+    badgeState.oaBreakdown = breakdown;
+    badgeState.driverExpPending = breakdown.driver;
+    renderBadges();
+});
+
+onBadgeData('tms/vehicles', data => {
+    badgeState.maintaining = Object.keys(data).filter(k => data[k] && data[k].maintaining === true).length;
+    renderBadges();
+});
+
+onBadgeData('tms/completed_orders', data => {
+    badgeCompletedRaw = data;
+    computeCompletedToday();
+});
+
+// 跨零点后自动刷新「今日已完成」
+setInterval(computeCompletedToday, 60 * 1000);
+
+mountBadges();
 </script>
 </body>
 </html>
