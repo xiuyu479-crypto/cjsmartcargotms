@@ -70,6 +70,16 @@ body {
     -moz-osx-font-smoothing: grayscale;
 }
 
+/* 登录页例外：保留全屏背景图（路径与 password.css 一致） */
+body.login-page {
+    background-color: transparent !important;
+    background-image: url("../images/background.jpg") !important;
+    background-repeat: no-repeat !important;
+    background-position: center center !important;
+    background-attachment: fixed !important;
+    background-size: cover !important;
+}
+
 h1, h2, h3, h4, h5, h6 {
     color: var(--c-text);
     font-weight: 600;
